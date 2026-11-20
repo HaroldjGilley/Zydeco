@@ -1,0 +1,1281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zydeco Scout</title>
+<meta name="description" content="Opponent intelligence and game-plan builder for football coaching staffs (prototype).">
+<style>
+:root{
+  --bg:#f4f5f1; --panel:#ffffff; --ink:#1a1f1b; --muted:#5b655d; --line:#dce1da; --chip:#edf1ec;
+  --accent:#1d6b40; --accent-ink:#ffffff; --gold:#b9770e; --bad:#b4372d; --good:#1d7a45; --warn:#a8790a;
+  --bar:#1d6b40; --bar2:#b9770e; --bar3:#4f64a3; --shadow:0 1px 2px rgba(0,0,0,.06);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#111412; --panel:#1a1f1b; --ink:#e6ebe7; --muted:#9aa59c; --line:#2c342e; --chip:#232a25;
+    --accent:#4dbd7b; --accent-ink:#0d1a12; --gold:#e2a64b; --bad:#e6695d; --good:#5bd08c; --warn:#e2b94c;
+    --bar:#4dbd7b; --bar2:#e2a64b; --bar3:#8ea3e0; --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111412; --panel:#1a1f1b; --ink:#e6ebe7; --muted:#9aa59c; --line:#2c342e; --chip:#232a25;
+  --accent:#4dbd7b; --accent-ink:#0d1a12; --gold:#e2a64b; --bad:#e6695d; --good:#5bd08c; --warn:#e2b94c;
+  --bar:#4dbd7b; --bar2:#e2a64b; --bar3:#8ea3e0; --shadow:none;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--panel);border-bottom:1px solid var(--line)}
+.top{display:flex;align-items:center;gap:12px;padding:10px 16px;max-width:1240px;margin:0 auto;flex-wrap:wrap}
+.brand{font-weight:800;letter-spacing:.2px;font-size:17px}
+.brand span{color:var(--accent)}
+.vs{color:var(--muted);font-size:13px}
+.vs b{color:var(--ink)}
+.spacer{flex:1}
+nav{display:flex;gap:2px;overflow-x:auto;padding:0 12px;max-width:1240px;margin:0 auto;scrollbar-width:thin}
+nav button{border:0;background:none;color:var(--muted);padding:10px 12px;font:inherit;font-weight:600;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap}
+nav button.on{color:var(--ink);border-bottom-color:var(--accent)}
+main{max-width:1240px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:0 0 4px}
+h2{font-size:17px;margin:0 0 10px}
+h3{font-size:14px;margin:0 0 8px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+p{margin:0 0 8px}
+.sub{color:var(--muted);margin-bottom:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:12px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:12px}
+@media (max-width:520px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;box-shadow:var(--shadow);min-width:0}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.kpi .v{font-size:22px;font-weight:800}
+.kpi .l{color:var(--muted);font-size:12px}
+.bar{display:grid;grid-template-columns:minmax(64px,1.1fr) minmax(50px,1.6fr) auto;align-items:center;gap:8px;margin:5px 0}
+.bl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bt{height:12px;background:var(--chip);border-radius:6px;overflow:hidden}
+.bt i{display:block;height:100%;background:var(--bar);border-radius:6px}
+.bar.alt .bt i{background:var(--bar2)}
+.bar.alt2 .bt i{background:var(--bar3)}
+.bv{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;min-width:44px}
+small,.muted{color:var(--muted)}
+.chip{display:inline-block;padding:1px 8px;border-radius:99px;background:var(--chip);font-size:12px;margin:1px 2px 1px 0;white-space:nowrap}
+.chip.bad{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
+.chip.good{background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)}
+.chip.warn{background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn)}
+.chip.acc{background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent)}
+.tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;color:var(--muted);font-weight:600;white-space:nowrap}
+tr.click{cursor:pointer}
+tr.click:hover td{background:var(--chip)}
+.heat td.c{text-align:center;font-weight:700;border:1px solid var(--line)}
+.filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:end}
+label.f{display:flex;flex-direction:column;font-size:12px;color:var(--muted);gap:2px}
+select,input,textarea,button{font:inherit;color:var(--ink)}
+select,input,textarea{background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:6px 8px;min-width:0}
+textarea{width:100%;min-height:90px;resize:vertical}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:7px;padding:7px 12px;cursor:pointer;font-weight:600}
+.btn:hover{border-color:var(--accent)}
+.btn.pri{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.sm{padding:3px 8px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:12px}
+.seg button{border:0;background:var(--panel);padding:7px 14px;cursor:pointer;font-weight:600;color:var(--muted)}
+.seg button.on{background:var(--accent);color:var(--accent-ink)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.pcard{display:flex;flex-direction:column;gap:6px}
+.pnum{font-size:26px;font-weight:800;line-height:1}
+.meter{height:8px;border-radius:5px;background:var(--chip);overflow:hidden}
+.meter i{display:block;height:100%}
+.dots{letter-spacing:2px;color:var(--accent)}
+.item{padding:10px 0;border-bottom:1px solid var(--line)}
+.item:last-child{border-bottom:0}
+.item b{display:block}
+.ev{font-size:12px;color:var(--muted)}
+.diverge{position:relative;height:12px;background:var(--chip);border-radius:6px;min-width:120px}
+.diverge i{position:absolute;top:0;bottom:0;border-radius:6px}
+.diverge:after{content:"";position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--muted)}
+.big{font-size:30px;font-weight:800}
+.film{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:12px}
+@media (max-width:900px){.film{grid-template-columns:1fr}}
+video{width:100%;background:#000;border-radius:8px;max-height:420px}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+.fgrid label{display:flex;flex-direction:column;font-size:12px;color:var(--muted);gap:2px}
+.banner{background:color-mix(in srgb,var(--gold) 16%,var(--panel));border:1px solid var(--gold);border-radius:8px;padding:8px 12px;margin-bottom:10px}
+.mention{font-weight:700;color:var(--accent)}
+dialog{border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);max-width:640px;width:calc(100% - 32px)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+.report h2{border-bottom:2px solid var(--accent);padding-bottom:4px;margin-top:22px}
+.report .card{break-inside:avoid}
+.legal{font-size:12px;color:var(--muted);margin-top:20px}
+.toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20}
+.toast.show{opacity:1}
+@media print{
+  header,.noprint{display:none!important}
+  body{background:#fff;color:#000}
+  main{padding:0;max-width:none}
+  .card{border:1px solid #bbb;box-shadow:none}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <div class="brand">Zydeco <span>Scout</span></div>
+    <div class="vs" id="vsline"></div>
+    <div class="spacer"></div>
+    <button class="btn sm noprint" data-act="theme" title="Toggle light/dark">◐ Theme</button>
+  </div>
+  <nav id="nav"></nav>
+</header>
+<main id="main"></main>
+<dialog id="dlg"></dialog>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+/* =========================================================================
+   Zydeco Scout prototype
+   All data stays in this browser (localStorage). Demo data is fictional.
+   ========================================================================= */
+const KEY = 'zydeco-scout-v1';
+const NONPLAY = ['Punt', 'FG', 'Penalty'];
+const DB = ['Short', 'Medium', 'Long', 'Very long'];
+const ZONES = ['Backed up', 'Own territory', 'Midfield', 'Plus territory', 'Red zone', 'High red', 'Goal line'];
+const SCOREB = ['Down 9+', 'Down 1-8', 'Tied', 'Up 1-8', 'Up 9+'];
+const PLAYTYPES = ['Run', 'Pass', 'PA', 'Screen', 'RPO'];
+const COVS = ['Cover 0', 'Cover 1', 'Cover 2', 'Cover 3', 'Cover 4'];
+const PRESS = ['4-man', '5-man', '6+', 'Sim'];
+const CUES = ['Standard', 'Nickel walk-up', 'LB mugged A-gap', 'Safety rotated down'];
+const FORMS = ['Doubles', 'Trips Rt', 'Trips Lt', 'Bunch Rt', 'Pistol Offset Lt', 'Pistol Offset Rt', 'Ace', 'I-Form', 'Empty'];
+const PERS = ['10', '11', '12', '21', '22'];
+const FRONTS = ['4-3 Over', '4-2-5', 'Tite'];
+const CONCEPTS = ['Inside Zone', 'Outside Zone', 'Power', 'Counter', 'Iso', 'Jet Sweep', 'QB Draw', 'QB Sneak', 'Stick', 'Slant-Flat', 'Mesh', 'Smash', 'Dagger', 'Four Verts', 'Fade', 'PA Boot', 'PA Post', 'Bubble', 'RB Screen', 'Tunnel', 'IZ/Glance RPO'];
+const INJ = ['Healthy', 'Questionable', 'Limited', 'Out'];
+const CLS = ['FR', 'SO', 'JR', 'SR'];
+
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pctN = (a, b) => b ? Math.round(100 * a / b) : 0;
+const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0;
+const distB = d => d <= 2 ? 'Short' : d <= 6 ? 'Medium' : d <= 10 ? 'Long' : 'Very long';
+const zoneOf = y => y >= 90 ? 'Backed up' : y >= 51 ? 'Own territory' : y >= 40 ? 'Midfield' : y >= 21 ? 'Plus territory' : y >= 11 ? 'Red zone' : y >= 4 ? 'High red' : 'Goal line';
+const scoreB = d => d <= -9 ? 'Down 9+' : d < 0 ? 'Down 1-8' : d === 0 ? 'Tied' : d <= 8 ? 'Up 1-8' : 'Up 9+';
+const isTwoMin = p => (p.qtr == 2 || p.qtr == 4) && p.clock <= 120;
+const scrim = p => !NONPLAY.includes(p.playType);
+const isRun = p => p.playType === 'Run';
+const isPressure = p => p.pressure && p.pressure !== '4-man';
+const isMan = p => p.coverage === 'Cover 0' || p.coverage === 'Cover 1';
+const success = p => p.result === 'TD' || p.yards >= (p.down == 1 ? 0.4 * p.dist : p.down == 2 ? 0.6 * p.dist : p.dist);
+const explosive = p => (isRun(p) && p.yards >= 12) || (!isRun(p) && p.yards >= 16);
+const clockStr = s => `${Math.floor(s / 60)}:${String(Math.max(0, s % 60)).padStart(2, '0')}`;
+const parseClock = t => { const m = String(t).match(/^(\d{1,2}):(\d{2})$/); return m ? (+m[1]) * 60 + (+m[2]) : (isFinite(+t) ? +t : 720); };
+const confLabel = n => n >= 20 ? ['High', 'good'] : n >= 8 ? ['Medium', 'acc'] : n >= 5 ? ['Low', 'warn'] : ['Insufficient', 'bad'];
+function countBy(arr, fn) { const m = new Map(); for (const x of arr) { const k = fn(x); if (k === undefined || k === null || k === '') continue; m.set(k, (m.get(k) || 0) + 1); } return [...m.entries()].sort((a, b) => b[1] - a[1]); }
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 1800); }
+
+/* ---------------- state ---------------- */
+let S;
+function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* storage unavailable: session only */ } }
+function load() { try { const t = localStorage.getItem(KEY); return t ? JSON.parse(t) : null; } catch (e) { return null; } }
+function defaultUI() { return { tab: 'overview', tside: 'O', filters: { O: {}, D: {} }, pside: 'D', film: null, pred: { side: 'O', down: 3, dist: 6, ytg: 38, hash: 'L', qtr: 3, clock: '8:00', score: 3, personnel: '', formation: '', motion: '' } }; }
+
+/* ---------------- demo data ---------------- */
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+function demoPlayers() {
+  const P = (num, name, pos, side, cls, starts, ht, wt, forty, tech, foot, conf, inj, nat, traits, notes) =>
+    ({ num: String(num), name, pos, side, cls, starts, ht, wt, forty, tech, foot, conf, inj, nat: nat || pos, traits, notes });
+  const them = [
+    P(7, 'Cole Arceneaux', 'QB', 'O', 'JR', 14, 74, 205, 4.75, 4, 3, 4, 'Healthy', '', ['locks on first read'], 'Accurate short; drifts right under interior pressure. Hard-count user on 3rd & short.'),
+    P(22, 'Dante Mouton', 'RB', 'O', 'SR', 24, 70, 200, 4.52, 4, 4, 5, 'Healthy', '', [], 'Workhorse; one-cut zone runner. Carry side always right hand.'),
+    P(28, 'Kobe Guidry', 'RB', 'O', 'SO', 2, 69, 185, 4.58, 3, 3, 3, 'Healthy', '', [], 'Change-of-pace back; weak in pass protection.'),
+    P(1, 'Jalen Broussard', 'WR', 'O', 'SR', 26, 73, 190, 4.42, 5, 5, 5, 'Healthy', '', [], 'Best player on the team. Fade/back-shoulder in the red zone. Must be bracketed on 3rd down.'),
+    P(2, 'Trey Landry', 'WR', 'O', 'JR', 12, 69, 175, 4.48, 4, 4, 4, 'Healthy', '', [], 'Slot; primary 3rd-down target. Jet sweep runner.'),
+    P(11, 'Mason Hebert', 'WR', 'O', 'SO', 5, 72, 180, 4.55, 3, 3, 2, 'Healthy', '', ['drops'], 'Drops under contact; body-catches.'),
+    P(85, 'Luke Thibodeaux', 'TE', 'O', 'SR', 20, 76, 240, 4.8, 4, 3, 4, 'Healthy', '', [], 'PA boot target; good in-line blocker.'),
+    P(74, 'Ryan Fontenot', 'LT', 'O', 'SR', 25, 77, 290, 5.3, 4, 4, 4, 'Healthy', '', [], 'Solid; struggles only with long-arm.'),
+    P(66, 'Andre Doucet', 'LG', 'O', 'JR', 13, 74, 285, 5.4, 3, 3, 4, 'Healthy', '', [], 'Pulls on power/counter: pull tell (depth off LOS).'),
+    P(55, 'Noah Breaux', 'C', 'O', 'SR', 23, 74, 275, 5.4, 4, 4, 5, 'Healthy', '', [], 'Makes protection calls; very vocal.'),
+    P(62, 'Eli Comeaux', 'RG', 'O', 'SO', 6, 75, 300, 5.5, 3, 2, 3, 'Healthy', '', ['heavy feet'], 'Late off the ball; lunges.'),
+    P(77, 'Gavin Romero', 'RT', 'O', 'FR', 3, 75, 295, 5.5, 2, 2, 2, 'Healthy', 'G', ['struggles vs speed', 'out of position', 'false starts'], 'Natural guard playing RT after starter injury. Short sets, false starts on the road.'),
+    P(91, 'Marcus Savoie', 'DE', 'D', 'SR', 26, 76, 255, 4.7, 5, 5, 5, 'Healthy', '', ['fatigue Q4'], 'Elite edge. Plays ~90% of snaps and some TE. Chip/slide to him.'),
+    P(95, 'Isaiah Benoit', 'DT', 'D', 'JR', 14, 74, 290, 5.1, 4, 3, 4, 'Healthy', '', [], 'Strong 3-tech; good vs double teams.'),
+    P(99, 'Caleb Melancon', 'DT', 'D', 'SO', 4, 73, 280, 5.2, 3, 3, 3, 'Healthy', '', [], 'Gets washed by down blocks.'),
+    P(44, 'Derek LeBlanc', 'DE', 'D', 'JR', 12, 75, 235, 4.8, 3, 3, 4, 'Healthy', '', ['crashes on runs'], 'Crashes inside on every run look. Vacates contain.'),
+    P(32, 'Blake Hidalgo', 'MLB', 'D', 'SR', 22, 72, 225, 4.75, 4, 4, 5, 'Healthy', '', [], 'Smart, calls the defense. Slow to depth in Cover 3.'),
+    P(45, 'Tyler Dupuis', 'WLB', 'D', 'FR', 4, 71, 210, 4.7, 2, 3, 3, 'Healthy', '', ['aggressive downhill', 'missed tackles'], 'Freshman; primary blitzer. Overruns plays; misses in space.'),
+    P(21, 'Jordan Simien', 'NB', 'D', 'JR', 11, 70, 185, 4.55, 3, 4, 4, 'Healthy', 'S', [], 'Nickel; walks up to blitz (tell).'),
+    P(3, 'Chris Bourque', 'CB', 'D', 'SR', 24, 72, 185, 4.45, 5, 4, 5, 'Healthy', '', [], 'Field corner; press-capable. Avoid early.'),
+    P(24, 'Aiden Guillory', 'CB', 'D', 'SO', 3, 70, 175, 4.5, 2, 2, 2, 'Healthy', 'WR', ['false steps', 'converted WR'], 'Converted WR now at boundary CB. False-steps on stems; grabs downfield.'),
+    P(8, 'Hunter Babineaux', 'FS', 'D', 'JR', 13, 73, 190, 4.55, 3, 3, 4, 'Healthy', '', ['eyes in backfield'], 'Triggers on play-action; vacates the deep middle.'),
+    P(13, 'Malik Batiste', 'SS', 'D', 'SR', 22, 72, 205, 4.6, 4, 3, 3, 'Questionable', '', ['avoids contact'], 'Left shoulder wrapped since Wk 8; arm-tackling, avoids taking on blocks.')
+  ];
+  const us = [
+    P(12, 'QB One', 'QB', 'O', 'SR', 20, 74, 200, 4.7, 4, 4, 4, 'Healthy', '', [], ''),
+    P(5, 'RB One', 'RB', 'O', 'JR', 10, 70, 195, 4.5, 4, 4, 4, 'Healthy', '', [], ''),
+    P(4, 'WR X', 'WR', 'O', 'SR', 18, 74, 190, 4.43, 4, 4, 5, 'Healthy', '', [], 'Our best vertical threat.'),
+    P(10, 'WR Z', 'WR', 'O', 'JR', 9, 71, 180, 4.5, 4, 3, 4, 'Healthy', '', [], ''),
+    P(17, 'Slot', 'WR', 'O', 'SO', 6, 68, 170, 4.46, 3, 4, 4, 'Healthy', '', [], 'Quick; good vs off coverage.'),
+    P(88, 'TE', 'TE', 'O', 'SR', 16, 76, 235, 4.75, 4, 3, 4, 'Healthy', '', [], ''),
+    P(70, 'LT', 'LT', 'O', 'SR', 20, 77, 285, 5.3, 4, 4, 4, 'Healthy', '', [], ''),
+    P(64, 'LG', 'LG', 'O', 'JR', 10, 74, 290, 5.4, 3, 3, 4, 'Healthy', '', [], ''),
+    P(52, 'C', 'C', 'O', 'SR', 18, 73, 270, 5.4, 4, 4, 4, 'Healthy', '', [], ''),
+    P(68, 'RG', 'RG', 'O', 'JR', 9, 75, 295, 5.5, 3, 3, 3, 'Healthy', '', [], ''),
+    P(75, 'RT', 'RT', 'O', 'SO', 5, 76, 280, 5.4, 3, 3, 3, 'Limited', '', [], 'Ankle; limited in practice.'),
+    P(90, 'DE Rush', 'DE', 'D', 'SR', 19, 75, 240, 4.65, 4, 5, 5, 'Healthy', '', [], 'Our best pass rusher.'),
+    P(97, 'DT', 'DT', 'D', 'JR', 11, 74, 285, 5.1, 4, 3, 4, 'Healthy', '', [], ''),
+    P(93, 'DT', 'DT', 'D', 'SO', 4, 73, 275, 5.2, 3, 3, 3, 'Healthy', '', [], ''),
+    P(47, 'DE', 'DE', 'D', 'JR', 10, 75, 245, 4.8, 3, 4, 4, 'Healthy', '', [], ''),
+    P(34, 'MLB', 'MLB', 'D', 'SR', 17, 72, 225, 4.7, 4, 4, 4, 'Healthy', '', [], ''),
+    P(40, 'WLB', 'WLB', 'D', 'JR', 8, 71, 215, 4.65, 3, 4, 4, 'Healthy', '', [], ''),
+    P(26, 'Nickel', 'NB', 'D', 'JR', 9, 69, 180, 4.52, 3, 4, 4, 'Healthy', '', [], ''),
+    P(2, 'CB1', 'CB', 'D', 'SR', 18, 72, 185, 4.47, 4, 4, 4, 'Healthy', '', [], ''),
+    P(6, 'CB2', 'CB', 'D', 'SO', 5, 70, 175, 4.55, 3, 3, 3, 'Healthy', '', [], ''),
+    P(9, 'FS', 'FS', 'D', 'SR', 15, 73, 195, 4.55, 4, 4, 4, 'Healthy', '', [], '')
+  ];
+  return { them, us };
+}
+
+function demoPairs() {
+  return [
+    { side: 'O', ours: '4', theirs: '24', ctx: 'X receiver vs boundary CB' },
+    { side: 'O', ours: '10', theirs: '3', ctx: 'Z receiver vs field CB' },
+    { side: 'O', ours: '17', theirs: '21', ctx: 'Slot vs nickel' },
+    { side: 'O', ours: '88', theirs: '45', ctx: 'TE vs WLB (routes)' },
+    { side: 'O', ours: '88', theirs: '13', ctx: 'TE vs SS (seams/blocking)' },
+    { side: 'O', ours: '5', theirs: '45', ctx: 'RB vs WLB (protection & routes)' },
+    { side: 'O', ours: '4', theirs: '8', ctx: 'X receiver vs FS (deep middle)' },
+    { side: 'O', ours: '70', theirs: '91', ctx: 'LT vs DE (pass rush)' },
+    { side: 'O', ours: '75', theirs: '44', ctx: 'RT vs DE' },
+    { side: 'O', ours: '64', theirs: '95', ctx: 'LG vs 3-tech' },
+    { side: 'O', ours: '68', theirs: '99', ctx: 'RG vs DT' },
+    { side: 'D', ours: '2', theirs: '1', ctx: 'CB1 vs their WR1' },
+    { side: 'D', ours: '6', theirs: '11', ctx: 'CB2 vs WR' },
+    { side: 'D', ours: '26', theirs: '2', ctx: 'Nickel vs slot' },
+    { side: 'D', ours: '90', theirs: '77', ctx: 'Rush DE vs RT' },
+    { side: 'D', ours: '47', theirs: '74', ctx: 'DE vs LT' },
+    { side: 'D', ours: '97', theirs: '62', ctx: 'DT vs RG' },
+    { side: 'D', ours: '93', theirs: '66', ctx: 'DT vs LG' },
+    { side: 'D', ours: '40', theirs: '85', ctx: 'WLB vs TE' },
+    { side: 'D', ours: '34', theirs: '22', ctx: 'MLB vs RB' },
+    { side: 'D', ours: '9', theirs: '1', ctx: 'FS over the top of WR1' }
+  ];
+}
+
+function genDemo() {
+  const R = mulberry32(20261120);
+  const W = o => { let s = 0; for (const k in o) s += o[k]; let r = R() * s; for (const k in o) { r -= o[k]; if (r <= 0) return k; } return Object.keys(o)[0]; };
+  const ri = (a, b) => a + Math.floor(R() * (b - a + 1));
+  const games = [
+    { id: 0, label: 'Wk 6 vs Lakeside', result: '' },
+    { id: 1, label: 'Wk 7 at St. Martin', result: '' },
+    { id: 2, label: 'Wk 8 vs Pine Hollow', result: '' },
+    { id: 3, label: 'Wk 9 at Delta Tech', result: '' }
+  ];
+  const formFor = pers => W({
+    '11': { 'Trips Rt': .28, 'Trips Lt': .2, 'Doubles': .24, 'Pistol Offset Lt': .1, 'Pistol Offset Rt': .1, 'Bunch Rt': .08 },
+    '12': { 'Ace': .5, 'Pistol Offset Lt': .25, 'Pistol Offset Rt': .25 },
+    '21': { 'I-Form': .7, 'Pistol Offset Rt': .3 },
+    '22': { 'I-Form': 1 },
+    '10': { 'Empty': .6, 'Doubles': .4 }
+  }[pers]);
+  const script = [
+    { personnel: '11', formation: 'Trips Rt', motion: 'Jet', playType: 'Run', concept: 'Jet Sweep', dir: 'R', player: '2' },
+    { personnel: '12', formation: 'Ace', motion: 'None', playType: 'PA', concept: 'PA Boot', dir: 'L', player: '85' },
+    { personnel: '11', formation: 'Pistol Offset Lt', motion: 'None', playType: 'Run', concept: 'Inside Zone', dir: 'L', player: '22' }
+  ];
+
+  function offCall(c) {
+    if (c.gamePlay < 3 && R() < .9) return { ...script[c.gamePlay] };
+    if (c.sudden && R() < .7) return { personnel: '11', formation: 'Doubles', motion: 'None', playType: 'Pass', concept: 'Four Verts', dir: 'M', player: '1' };
+    const fieldDir = c.hash === 'L' ? 'R' : c.hash === 'R' ? 'L' : (R() < .5 ? 'L' : 'R');
+    if (c.twoMin && c.diff <= 8) {
+      const personnel = R() < .55 ? '10' : '11';
+      const formation = personnel === '10' ? (R() < .65 ? 'Empty' : 'Doubles') : 'Doubles';
+      const t = W({ Pass: .85, Screen: .1, Run: .05 });
+      if (t === 'Run') return { personnel, formation, motion: 'None', playType: 'Run', concept: 'QB Draw', dir: 'M', player: '7' };
+      if (t === 'Screen') return { personnel, formation, motion: 'None', playType: 'Screen', concept: 'Tunnel', dir: fieldDir, player: '1' };
+      const concept = W({ 'Slant-Flat': .25, 'Smash': .3, 'Four Verts': .2, 'Stick': .25 });
+      return { personnel, formation, motion: 'None', playType: 'Pass', concept, dir: concept === 'Smash' ? fieldDir : W({ L: .3, M: .3, R: .4 }), player: W({ '1': .4, '2': .35, '11': .15, '85': .1 }) };
+    }
+    if (c.ytg <= 3) {
+      const personnel = R() < .6 ? '22' : '21';
+      if (R() < .8) { const concept = W({ 'Power': .5, 'QB Sneak': .3, 'Iso': .2 }); return { personnel, formation: 'I-Form', motion: 'None', playType: 'Run', concept, dir: concept === 'QB Sneak' ? 'M' : 'R', player: concept === 'QB Sneak' ? '7' : '22' }; }
+      return { personnel, formation: 'I-Form', motion: 'None', playType: 'PA', concept: 'PA Boot', dir: 'L', player: '85' };
+    }
+    const personnel = c.dist <= 2 ? W({ '21': .45, '12': .35, '11': .2 }) : c.dist >= 7 ? W({ '11': .65, '10': .25, '12': .1 }) : W({ '11': .6, '12': .25, '21': .1, '10': .05 });
+    const formation = formFor(personnel);
+    let run = c.down == 1 ? .55 : c.down == 2 ? (c.dist <= 3 ? .65 : c.dist <= 6 ? .5 : .35) : c.down == 3 ? (c.dist <= 2 ? .7 : c.dist <= 6 ? .25 : .1) : (c.dist <= 2 ? .75 : .2);
+    if (formation === 'I-Form') run += .3;
+    if (formation.startsWith('Pistol')) run += .32;
+    if (formation === 'Empty') run = .04;
+    if (formation === 'Bunch Rt') run -= .2;
+    if (formation === 'Ace') run += .05;
+    if (formation === 'Doubles') run -= .05;
+    run = Math.min(.95, Math.max(.03, run));
+    let motion = 'None';
+    if (formation.startsWith('Trips') && R() < .3) motion = 'Jet';
+    else if (R() < .1) motion = 'Shift';
+    if (motion === 'Jet' && R() < .55) return { personnel, formation, motion, playType: 'Run', concept: 'Jet Sweep', dir: formation === 'Trips Rt' ? 'L' : 'R', player: '2' };
+    if (R() < run) {
+      let concept, dir;
+      if (formation.startsWith('Pistol')) {
+        concept = W({ 'Inside Zone': .45, 'Power': .35, 'Counter': .2 });
+        const side = formation.endsWith('Lt') ? 'L' : 'R';
+        dir = R() < .88 ? side : (side === 'L' ? 'R' : 'L');
+      } else if (formation === 'I-Form') {
+        concept = W({ 'Power': .5, 'Iso': .3, 'Outside Zone': .2 });
+        dir = R() < .75 ? fieldDir : (fieldDir === 'L' ? 'R' : 'L');
+      } else {
+        concept = W({ 'Inside Zone': .4, 'Outside Zone': .3, 'Power': .2, 'QB Draw': .1 });
+        dir = concept === 'QB Draw' ? 'M' : (R() < .65 ? fieldDir : (fieldDir === 'L' ? 'R' : 'L'));
+      }
+      const player = concept === 'QB Draw' ? '7' : W({ '22': .75, '28': .25 });
+      return { personnel, formation, motion, playType: 'Run', concept, dir, player };
+    }
+    const t = W({ Screen: c.down == 3 && c.dist >= 7 ? .25 : .13, RPO: c.down < 3 ? .12 : 0, PA: c.down < 3 ? (personnel === '12' ? .35 : .15) : .02, Pass: .6 });
+    const third = c.down >= 3;
+    const tgt = () => third ? W({ '2': .45, '1': .3, '85': .15, '22': .1 }) : W({ '1': .35, '2': .25, '11': .2, '85': .15, '22': .05 });
+    if (t === 'Screen') { const concept = W({ 'Bubble': .4, 'RB Screen': .4, 'Tunnel': .2 }); return { personnel, formation, motion, playType: 'Screen', concept, dir: formation === 'Trips Lt' ? 'L' : formation.includes('Rt') ? 'R' : fieldDir, player: concept === 'RB Screen' ? '22' : W({ '2': .6, '11': .4 }) }; }
+    if (t === 'RPO') return { personnel, formation, motion, playType: 'RPO', concept: 'IZ/Glance RPO', dir: fieldDir, player: W({ '22': .5, '1': .3, '2': .2 }) };
+    if (t === 'PA') { const concept = W({ 'PA Boot': .55, 'PA Post': .45 }); return { personnel, formation, motion, playType: 'PA', concept, dir: concept === 'PA Boot' ? 'L' : 'M', player: concept === 'PA Boot' ? W({ '85': .6, '11': .4 }) : W({ '1': .7, '11': .3 }) }; }
+    let concept;
+    if (c.ytg <= 20 && R() < .35) concept = 'Fade';
+    else concept = c.dist <= 6 ? W({ 'Stick': .3, 'Slant-Flat': .25, 'Mesh': .3, 'Smash': .15 }) : W({ 'Mesh': .2, 'Smash': .25, 'Four Verts': .2, 'Dagger': .35 });
+    const dir = formation === 'Trips Rt' || formation === 'Bunch Rt' ? (R() < .65 ? 'R' : W({ L: .5, M: .5 })) : formation === 'Trips Lt' ? (R() < .65 ? 'L' : W({ R: .5, M: .5 })) : W({ L: .35, M: .3, R: .35 });
+    return { personnel, formation, motion, playType: 'Pass', concept, dir, player: concept === 'Fade' ? '1' : tgt() };
+  }
+
+  function defCall(c) {
+    const personnel = W({ '11': .6, '12': .2, '21': .1, '10': .1 });
+    const formation = formFor(personnel);
+    const front = (personnel === '12' || personnel === '21') ? (R() < .6 ? 'Tite' : '4-3 Over') : personnel === '10' ? '4-2-5' : (R() < .7 ? '4-2-5' : '4-3 Over');
+    let cov, pr;
+    const db = distB(c.dist);
+    if (c.ytg <= 20) { cov = W({ 'Cover 0': .25, 'Cover 1': .35, 'Cover 3': .2, 'Cover 4': .2 }); pr = .45; }
+    else if (c.down == 3 && db === 'Medium') { cov = W({ 'Cover 1': .55, 'Cover 0': .1, 'Cover 3': .2, 'Cover 4': .15 }); pr = .62; }
+    else if (c.down == 3 && db === 'Short') { cov = W({ 'Cover 1': .4, 'Cover 0': .2, 'Cover 3': .4 }); pr = .5; }
+    else if (c.down >= 3) { cov = W({ 'Cover 3': .35, 'Cover 4': .35, 'Cover 2': .2, 'Cover 1': .1 }); pr = .22; }
+    else { cov = W({ 'Cover 3': .5, 'Cover 1': .2, 'Cover 4': .2, 'Cover 2': .1 }); pr = .2; }
+    let pressure = '4-man', blitzer = '';
+    if (cov === 'Cover 0') { pressure = '6+'; blitzer = W({ '45': .5, '21': .3, '13': .2 }); }
+    else if (R() < pr) { pressure = W({ '5-man': .65, '6+': .2, 'Sim': .15 }); blitzer = W({ '45': .45, '21': .3, '13': .15, '32': .1 }); }
+    let cue = 'Standard';
+    if (blitzer === '21' && R() < .78) cue = 'Nickel walk-up';
+    else if ((blitzer === '45' || blitzer === '32') && R() < .62) cue = 'LB mugged A-gap';
+    else if (!blitzer) { const r = R(); if (r < .07) cue = 'Nickel walk-up'; else if (r < .11) cue = 'LB mugged A-gap'; else if ((cov === 'Cover 3' || cov === 'Cover 1') && r < .4) cue = 'Safety rotated down'; }
+    const shell = (cov === 'Cover 2' || cov === 'Cover 4') ? (R() < .85 ? 'MOFO' : 'MOFC') : (R() < .9 ? 'MOFC' : 'MOFO');
+    const playType = W({ Run: .45, Pass: .38, PA: .09, Screen: .08 });
+    const concept = playType === 'Run' ? W({ 'Inside Zone': .4, 'Power': .3, 'Outside Zone': .3 }) : playType === 'PA' ? 'PA Post' : playType === 'Screen' ? 'RB Screen' : W({ 'Stick': .25, 'Slant-Flat': .25, 'Smash': .2, 'Four Verts': .15, 'Mesh': .15 });
+    return { personnel, formation, motion: 'None', front, coverage: cov, shell, pressure, blitzer, cue, playType, concept, dir: W({ L: .4, M: .2, R: .4 }), player: '' };
+  }
+
+  const plays = [];
+  let pid = 1;
+  for (const g of games) {
+    let q = 1, clock = 720, us = 0, them = 0, side = g.id % 2 ? 'D' : 'O', gamePlay = 0, sudden = false, vt = 15, drive = 0;
+    while (q <= 4) {
+      drive++;
+      let ytg = sudden ? ri(40, 60) : ri(62, 80), down = 1, dist = 10, first = true, end = null;
+      while (!end && q <= 4) {
+        const twoMin = (q === 2 || q === 4) && clock <= 120;
+        const offDiff = side === 'O' ? us - them : them - us;
+        const hash = W({ L: .4, M: .2, R: .4 });
+        const base = { id: pid++, game: g.id, side, drive, qtr: q, clock, down, dist, ytg, hash, score: us - them, sudden: first && sudden, videoT: vt, notes: '' };
+        vt += ri(35, 55);
+        if (down === 4) {
+          let dec;
+          if (side === 'O') dec = ((dist <= 3 && ytg <= 60) || (twoMin && offDiff < 0) || dist <= 1) ? 'Go' : ytg <= 30 ? 'FG' : 'Punt';
+          else dec = (dist <= 1 || (twoMin && offDiff < 0)) ? 'Go' : ytg <= 30 ? 'FG' : 'Punt';
+          if (dec !== 'Go') {
+            const good = dec === 'FG' && R() < .78;
+            if (side === 'O') plays.push({ ...base, personnel: '', formation: dec === 'FG' ? 'FG' : 'Punt', motion: '', playType: dec, concept: dec, dir: '', player: dec === 'FG' ? '39' : '39', yards: 0, result: dec === 'FG' ? (good ? 'Good' : 'Missed') : 'Punt', decision: dec });
+            if (good) { if (side === 'O') us += 3; else them += 3; }
+            end = 'kick';
+            clock -= 12; if (clock <= 0) { q++; clock = 720; }
+            break;
+          }
+          base.decision = 'Go';
+        }
+        let call, y, result = '', fault = '', faultType = '';
+        if (side === 'O') {
+          if (R() < .035) {
+            call = { personnel: '11', formation: formFor('11'), motion: 'None', playType: 'Penalty', concept: 'False start', dir: '', player: '' };
+            y = -5; result = 'Penalty'; fault = W({ '77': .7, '62': .3 }); faultType = 'False start';
+          } else {
+            call = offCall({ ...base, gamePlay, twoMin, diff: us - them });
+            gamePlay++;
+            if (call.playType === 'Run') {
+              y = R() < .1 ? ri(12, 38) : ri(-2, 8);
+              if (call.concept === 'Jet Sweep') y = R() < .22 ? ri(12, 45) : ri(-1, 9);
+              if (call.concept === 'QB Sneak') y = ri(0, 3);
+              if (call.dir === 'R' && call.concept !== 'Jet Sweep') y -= 1;
+              if (R() < .015) { result = 'Fumble'; }
+            } else if (call.playType === 'Screen') {
+              y = R() < .8 ? (R() < .15 ? ri(16, 40) : ri(-2, 9)) : 0;
+              if (y === 0) result = 'Incomplete';
+            } else {
+              if (R() < .065) { y = -ri(4, 9); result = 'Sack'; fault = W({ '77': .6, '74': .2, '62': .2 }); faultType = 'Sack allowed'; }
+              else {
+                const deep = ['Four Verts', 'PA Post', 'Dagger', 'Fade'].includes(call.concept);
+                const comp = deep ? .48 : .66;
+                if (R() < comp) y = deep ? ri(12, 42) : (R() < .12 ? ri(16, 45) : ri(3, 11));
+                else { y = 0; result = 'Incomplete'; if (R() < .22) { fault = W({ '11': .6, '2': .2, '85': .2 }); faultType = 'Drop'; } }
+                if (!result && R() < .035) result = 'INT';
+              }
+            }
+          }
+        } else {
+          call = defCall(base);
+          if (call.playType === 'Run') {
+            y = R() < .09 ? ri(12, 40) : ri(-2, 7);
+            if (call.dir === 'L' && R() < .3 && !isPressure(call)) y += ri(1, 4);
+            if (R() < .15) { y += ri(3, 10); fault = W({ '45': .55, '13': .25, '8': .2 }); faultType = 'Missed tackle'; }
+            if (q === 4) y += ri(0, 3);
+            if (R() < .02) result = 'Fumble';
+          } else if (call.playType === 'Screen') {
+            y = isPressure(call) ? ri(5, 22) : ri(-2, 7);
+          } else {
+            if (isPressure(call) && R() < .14) { y = -ri(5, 9); result = 'Sack'; }
+            else {
+              const comp = R() < .6;
+              if (!comp) { y = 0; result = 'Incomplete'; }
+              else if (isMan(call) && call.dir === 'L' && R() < .32) { y = ri(18, 55); fault = '24'; faultType = 'Blown coverage'; }
+              else if (call.playType === 'PA' && (call.coverage === 'Cover 3' || call.coverage === 'Cover 1') && R() < .35) { y = ri(20, 60); fault = '8'; faultType = 'Bit on play-action'; }
+              else y = R() < .1 ? ri(16, 35) : ri(3, 12);
+              if (q === 4 && comp) y += ri(0, 4);
+              if (!result && R() < .045) result = 'INT';
+            }
+          }
+        }
+        if (result === 'INT' || result === 'Fumble') y = Math.max(0, Math.min(y, 6));
+        const p = { ...base, ...call, yards: y, result, fault, faultType };
+        if (!p.result) p.result = y >= ytg ? 'TD' : y >= dist ? '1st Down' : 'Gain';
+        plays.push(p);
+        first = false;
+        clock -= twoMin ? ri(12, 22) : ri(26, 42);
+        if (p.result === 'INT' || p.result === 'Fumble') { end = 'turnover'; }
+        else if (p.result === 'TD') { if (side === 'O') us += 7; else them += 7; end = 'td'; }
+        else {
+          ytg = Math.min(99, ytg - y);
+          if (p.result === 'Penalty') { dist += 5; }
+          else if (y >= dist) { down = 1; dist = Math.min(10, ytg); }
+          else if (down === 4) { end = 'downs'; }
+          else { down++; dist -= y; }
+          if (dist < 1) dist = 1;
+        }
+        if (clock <= 0) { q++; clock = 720; if (q === 3) end = end || 'half'; }
+      }
+      sudden = end === 'turnover' || end === 'downs';
+      side = side === 'O' ? 'D' : 'O';
+    }
+    const opp = g.label.replace(/^Wk \d+ (vs|at) /, '');
+    g.result = `${us > them ? 'W' : us < them ? 'L' : 'T'} ${us}-${them}`;
+    g.opp = opp;
+  }
+  const { them, us } = demoPlayers();
+  return {
+    v: 1,
+    meta: { opponent: 'Bayou Ridge Gators', ourTeam: 'Teche Valley Rams', gameDate: 'Fri, Nov 27' },
+    games, plays, players: them, ours: us, pairs: demoPairs(),
+    intel: [
+      { id: 1, type: 'Injury report', title: 'Local paper, Wk 9 recap', date: '2026-11-14', text: 'Gators SS #13 Malik Batiste left in the 3rd quarter holding his left shoulder and returned with a heavy wrap. Coach called him "questionable but tough." Starting RT went down in Wk 5 (knee, out for season); #77 Gavin Romero, a freshman guard, has started at tackle since.' },
+      { id: 2, type: 'Press conference', title: 'Gators HC weekly presser (transcript)', date: '2026-11-17', text: 'We need to get #2 the ball more on third down, he is our chain mover. Defensively we will keep bringing pressure, that is who we are. #24 is young but he is a competitor; he played receiver for us last year.' },
+      { id: 3, type: 'Coach note', title: 'DC film note, Wk 8', date: '2026-11-16', text: 'When #21 walks up over the slot before the snap, he is coming. #45 runs himself out of plays on counter. #8 eyes are in the backfield on every run action.' }
+    ],
+    ui: defaultUI()
+  };
+}
+
+/* ---------------- analytics ---------------- */
+const playsFor = side => S.plays.filter(p => p.side === side && scrim(p));
+function derive(p, k) {
+  switch (k) {
+    case 'distB': return distB(p.dist);
+    case 'zone': return zoneOf(p.ytg);
+    case 'scoreB': return scoreB(p.score);
+    case 'twoMin': return isTwoMin(p) ? 'Yes' : 'No';
+    default: return String(p[k] ?? '');
+  }
+}
+function applyFilters(arr, f) { return arr.filter(p => Object.entries(f || {}).every(([k, v]) => v === '' || v == null || derive(p, k) === String(v))); }
+function playerByNum(num, list) { return (list || S.players).find(p => p.num === String(num)); }
+function pname(num) { const p = playerByNum(num); return p ? `#${p.num} ${p.pos}` : (num ? `#${num}` : ''); }
+const maxGame = () => S.games.reduce((m, g) => Math.max(m, g.id), 0);
+
+function computeTells(side) {
+  const pool = playsFor(side);
+  if (pool.length < 10) return [];
+  const out = [];
+  const add = (feature, val, sub, outcomeLabel, p, base, extra) => {
+    const n = sub.length, gamesN = new Set(sub.map(x => x.game)).size, delta = p - base;
+    if (n < 8 || Math.abs(delta) < .2 || gamesN < 2) return;
+    const strong = Math.abs(delta) >= .35 && n >= 12 && gamesN >= 3;
+    out.push({ side, feature, val, n, games: gamesN, p, base, outcomeLabel, strength: gamesN < 3 ? 'Developing' : strong ? 'Strong' : 'Moderate', score: Math.abs(delta) * Math.sqrt(n) * (gamesN >= 3 ? 1 : .6), extra: extra || '' });
+  };
+  if (side === 'O') {
+    const baseRun = pool.filter(isRun).length / pool.length;
+    for (const feat of ['formation', 'personnel', 'motion']) {
+      for (const [val] of countBy(pool, p => p[feat])) {
+        if (feat === 'motion' && val === 'None') continue;
+        const sub = pool.filter(p => p[feat] === val);
+        const r = sub.filter(isRun).length / sub.length;
+        let extra = '';
+        const runs = sub.filter(isRun);
+        if (runs.length >= 6) {
+          const [d, c] = countBy(runs, p => p.dir)[0] || [];
+          if (c / runs.length >= .75) extra = `${pctN(c, runs.length)}% of runs go ${d === 'L' ? 'left' : d === 'R' ? 'right' : 'middle'}`;
+        }
+        if (r >= baseRun) add(feat, val, sub, 'run', r, baseRun, extra);
+        else add(feat, val, sub, 'pass', 1 - r, 1 - baseRun, extra);
+      }
+    }
+    const runs = pool.filter(isRun);
+    for (const [h] of countBy(runs, p => p.hash)) {
+      if (h === 'M') continue;
+      const sub = runs.filter(p => p.hash === h), field = h === 'L' ? 'R' : 'L';
+      const fs = sub.filter(p => p.dir === field).length / sub.length;
+      add('hash', h, sub, 'run to the field', fs, .5);
+    }
+  } else {
+    const basePr = pool.filter(isPressure).length / pool.length, baseMan = pool.filter(isMan).length / pool.length;
+    for (const feat of ['cue', 'shell', 'front']) {
+      for (const [val] of countBy(pool, p => p[feat])) {
+        if (feat === 'cue' && val === 'Standard') continue;
+        const sub = pool.filter(p => p[feat] === val);
+        const pr = sub.filter(isPressure).length / sub.length;
+        const [bz, bc] = countBy(sub.filter(isPressure), p => p.blitzer)[0] || [];
+        add(feat, val, sub, 'pressure', pr, basePr, bz && bc >= 4 ? `blitzer most often ${pname(bz)} (${pctN(bc, sub.filter(isPressure).length)}%)` : '');
+        const mn = sub.filter(isMan).length / sub.length;
+        add(feat, val, sub, 'man coverage (Cover 0/1)', mn, baseMan);
+      }
+    }
+  }
+  return out.sort((a, b) => b.score - a.score);
+}
+function tellText(t) {
+  const fl = { formation: 'Formation', personnel: 'Personnel', motion: 'Motion', hash: 'Hash', cue: 'Pre-snap cue', shell: 'Pre-snap shell', front: 'Front' }[t.feature];
+  const v = t.feature === 'personnel' ? `${t.val} personnel` : t.feature === 'hash' ? `${t.val === 'L' ? 'Left' : 'Right'} hash runs` : t.val;
+  return `${fl}: ${v} → ${Math.round(t.p * 100)}% ${t.outcomeLabel}${t.feature === 'hash' ? '' : ` (baseline ${Math.round(t.base * 100)}%)`}`;
+}
+
+function predict(side, sit) {
+  const pool = playsFor(side);
+  const mg = maxGame();
+  const di = DB.indexOf(distB(sit.dist)), zi = ZONES.indexOf(zoneOf(sit.ytg)), sb = scoreB(sit.score), tm = isTwoMin(sit);
+  const ws = pool.map(p => {
+    let w = 1;
+    const dd = Math.abs(p.down - sit.down); w *= dd === 0 ? 1 : dd === 1 ? .08 : .02;
+    const bd = Math.abs(DB.indexOf(distB(p.dist)) - di); w *= bd === 0 ? 1 : bd === 1 ? .15 : .03;
+    const zd = Math.abs(ZONES.indexOf(zoneOf(p.ytg)) - zi); w *= zd === 0 ? 1 : zd === 1 ? .75 : .45;
+    w *= p.hash === sit.hash ? 1 : .85;
+    w *= scoreB(p.score) === sb ? 1 : .8;
+    w *= isTwoMin(p) === tm ? 1 : .25;
+    if (sit.personnel) w *= p.personnel === sit.personnel ? 1 : .01;
+    if (sit.formation) w *= p.formation === sit.formation ? 1 : .01;
+    if (side === 'O' && sit.motion) w *= p.motion === sit.motion ? 1 : .05;
+    w *= Math.pow(.5, (mg - p.game) / 3);
+    return w;
+  });
+  const Wt = ws.reduce((a, b) => a + b, 0), W2 = ws.reduce((a, b) => a + b * b, 0);
+  const ess = W2 ? Wt * Wt / W2 : 0;
+  // hierarchical prior: closest broad subset with enough plays, else the season mix
+  const look = p => (!sit.formation || p.formation === sit.formation) && (!sit.personnel || p.personnel === sit.personnel);
+  const tiers = [pool.filter(p => look(p) && p.down == sit.down && distB(p.dist) === distB(sit.dist)), pool.filter(p => p.down == sit.down && distB(p.dist) === distB(sit.dist)), pool.filter(look), pool];
+  const priorPool = tiers.find(t => t.length >= 6) || pool;
+  const dist = (keyFn, k = 3) => {
+    const prior = new Map(), wm = new Map();
+    let pc = 0;
+    priorPool.forEach(p => { const key = keyFn(p); if (key === '' || key == null) return; pc++; prior.set(key, (prior.get(key) || 0) + 1); });
+    pool.forEach((p, i) => { const key = keyFn(p); if (key === '' || key == null) return; if (!prior.has(key)) prior.set(key, 0); wm.set(key, (wm.get(key) || 0) + ws[i]); });
+    if (!pc) return [];
+    const wsum = [...wm.values()].reduce((a, b) => a + b, 0);
+    return [...prior.keys()].map(key => [key, ((wm.get(key) || 0) + k * prior.get(key) / pc) / (wsum + k)]).sort((a, b) => b[1] - a[1]);
+  };
+  const similar = pool.map((p, i) => [p, ws[i]]).sort((a, b) => b[1] - a[1]).slice(0, 8).map(x => x[0]);
+  return { ess, n: pool.length, dist, similar, priorN: priorPool.length };
+}
+
+const COUNTER_D = {
+  'Inside Zone': 'Spill with the end, fill the cutback with the backside LB.',
+  'Outside Zone': 'Set a hard edge; force it back inside; backside chase.',
+  'Power': 'Wrong-arm the kick-out, spill to the alley, squeeze the pulling guard.',
+  'Counter': 'Backside DE closes, LBs read guard pull, do not overrun.',
+  'Iso': 'Take on the lead back inside-out; DT squeezes.',
+  'Jet Sweep': 'Run with motion (rock-and-replace), force with the corner.',
+  'QB Draw': 'Spy or green-dog the RB; rush lanes stay disciplined.',
+  'QB Sneak': 'Low pad level, get under the center, submarine.',
+  'Stick': 'Sink the flat defender, squeeze stick from outside-in.',
+  'Slant-Flat': 'Cloud/squat corner, inside leverage on the slant.',
+  'Mesh': 'Banjo/robber, collision crossers, LB wall.',
+  'Smash': 'Quarters or cloud-trap corner; safety over the corner route.',
+  'Dagger': 'Rob the dig, keep the deep safety over the seam.',
+  'Four Verts': 'Quarters or bracket the seams; carry verticals.',
+  'Fade': 'Outside leverage, eyes on hands; FS shade to the fade side.',
+  'PA Boot': 'Backside DE keeps contain; LB peels to the flat.',
+  'PA Post': 'FS keeps eyes on his man, not the backfield; deepest of the deep.',
+  'Bubble': 'Overhang plays it fast; corner sets the edge.',
+  'RB Screen': 'DL peel on screen read; LBs rally.',
+  'Tunnel': 'Inside-out leverage on the WR; DL peel back.',
+  'IZ/Glance RPO': 'Conflict defender plays the pass; fill with the safety.'
+};
+const COUNTER_O = {
+  'Cover 0': 'Hot/sight adjust, quick fade, max protect with a shot, screens.',
+  'Cover 1': 'Mesh, rub/pick routes, slants, double moves at the weak corner.',
+  'Cover 2': 'Smash, hole shot between CB and safety, inside runs vs light box.',
+  'Cover 3': 'Seams, flood/sail, PA post vs eyes-in-backfield FS, curl-flat.',
+  'Cover 4': 'Run the ball (light box), flat-curl, smash-switch, underneath.',
+  pressure: 'Screens, quick game, hot routes; slide protection to the cue side.'
+};
+
+function vulnerability(p) {
+  const expV = { FR: 1, SO: .66, JR: .33, SR: 0 }[p.cls] ?? .5;
+  const injV = { Out: 1, Limited: .8, Questionable: .5, Healthy: 0 }[p.inj] ?? 0;
+  const st = playerStats(p);
+  const games = Math.max(1, S.games.length);
+  const faultV = Math.min(1, st.faults / (games * 2));
+  const oop = p.nat && p.nat !== p.pos ? 1 : 0;
+  const v = ((5 - p.tech) / 4) * .2 + ((5 - p.foot) / 4) * .15 + ((5 - p.conf) / 4) * .15 + expV * .15 + faultV * .1 + injV * .15 + oop * .1;
+  return Math.round(100 * Math.max(0, Math.min(1, v)));
+}
+function playerStats(p) {
+  const all = S.plays;
+  const own = all.filter(x => x.side === p.side && x.player === p.num && scrim(x));
+  const faults = all.filter(x => x.fault === p.num);
+  return {
+    carries: own.filter(isRun).length,
+    targets: own.filter(x => !isRun(x)).length,
+    yards: own.reduce((a, x) => a + (x.result === 'Incomplete' || x.result === 'INT' ? 0 : x.yards), 0),
+    explosives: own.filter(explosive).length,
+    faults: faults.length,
+    faultTypes: countBy(faults, x => x.faultType),
+    faultYards: faults.reduce((a, x) => a + Math.max(0, x.yards), 0)
+  };
+}
+function rating(p) {
+  const g = ((p.tech + p.foot + p.conf) / 3 - 1) / 4 * 60;
+  const exp = { FR: 0, SO: 8, JR: 14, SR: 20 }[p.cls] ?? 10;
+  const inj = { Healthy: 0, Questionable: -8, Limited: -15, Out: -40 }[p.inj] ?? 0;
+  const oop = p.nat && p.nat !== p.pos ? -10 : 0;
+  return 20 + g + exp + inj + oop;
+}
+const LINE = ['LT', 'LG', 'C', 'RG', 'RT', 'DE', 'DT', 'OL', 'DL', 'NT'];
+function matchup(pair) {
+  const o = playerByNum(pair.ours, S.ours), t = playerByNum(pair.theirs, S.players);
+  if (!o || !t) return null;
+  const why = [];
+  let phys = 0;
+  if (LINE.includes(o.pos) && LINE.includes(t.pos)) {
+    const wd = Math.max(-12, Math.min(12, (o.wt - t.wt) / 4));
+    phys = wd + Math.max(-6, Math.min(6, (o.forty && t.forty ? (t.forty - o.forty) * 20 : 0)));
+    if (Math.abs(o.wt - t.wt) >= 15) why.push(`${o.wt > t.wt ? '+' : ''}${o.wt - t.wt} lb`);
+    if (o.forty && t.forty && Math.abs(t.forty - o.forty) >= .15) why.push(`${t.forty > o.forty ? 'faster' : 'slower'} by ${Math.abs(t.forty - o.forty).toFixed(2)}s`);
+  } else {
+    phys = Math.max(-15, Math.min(15, (t.forty - o.forty) * 100)) + Math.max(-5, Math.min(5, (o.ht - t.ht) * 1.5));
+    if (Math.abs(t.forty - o.forty) >= .04) why.push(`${t.forty > o.forty ? 'faster' : 'slower'} by ${Math.abs(t.forty - o.forty).toFixed(2)}s`);
+    if (Math.abs(o.ht - t.ht) >= 2) why.push(`${o.ht > t.ht ? '+' : ''}${o.ht - t.ht} in height`);
+  }
+  if (t.cls === 'FR' || t.cls === 'SO') why.push(`their player is a ${t.cls}`);
+  if (t.inj !== 'Healthy') why.push(`their player ${t.inj.toLowerCase()}`);
+  if (o.inj !== 'Healthy') why.push(`our player ${o.inj.toLowerCase()}`);
+  if (t.nat && t.nat !== t.pos) why.push(`their player out of position (natural ${t.nat})`);
+  (t.traits || []).forEach(tr => why.push(tr));
+  const edge = Math.round((rating(o) - rating(t)) / 2 + phys / 2);
+  const label = edge >= 18 ? ['Major advantage', 'good'] : edge >= 7 ? ['Advantage', 'good'] : edge > -7 ? ['Even', ''] : edge > -18 ? ['Disadvantage', 'warn'] : ['Major disadvantage', 'bad'];
+  return { pair, o, t, edge, label, why };
+}
+
+const TRAIT_PLAYBOOK = [
+  ['false step', 'Double moves (sluggo, stop-and-go) and back-shoulder throws at him; he bites on stems.'],
+  ['converted wr', 'Raw coverage technique: stack/bunch releases, hard vertical stems into in-breakers, make him play the hands.'],
+  ['eyes in backfield', 'Play-action post and seam shots; he triggers on run action and vacates the deep middle.'],
+  ['aggressive downhill', 'Counter, play-action and screens behind him; let him overrun the play.'],
+  ['missed tackle', 'Get the ball in space toward him: perimeter runs, swings, screens. Make him tackle in the open field.'],
+  ['crashes on runs', 'Boot/naked away from his crash, read-option him, reverses to his side.'],
+  ['struggles vs speed', 'Put your best speed rusher on him; wide alignment, twists to his side on passing downs.'],
+  ['out of position', 'Attack his edge with speed and games; he lacks the footwork of a natural player at that spot.'],
+  ['avoids contact', 'Run at his side and make him tackle; crack blocks and downhill runs toward him.'],
+  ['locks on first read', 'Robber/lurk defender in the first-read throwing lane; rotate late to disguise.'],
+  ['drops', 'Challenge him with press and contested catches; hit him as the ball arrives.'],
+  ['heavy feet', 'Quick interior games and inside moves; he lunges and over-sets.'],
+  ['false start', 'Movement and hard counts on 3rd & short; crowd noise on the road.'],
+  ['fatigue q4', 'Tempo in the 4th quarter and long drives to wear him down; run at him late.']
+];
+function playbookFor(trait) { const t = trait.toLowerCase(); const m = TRAIT_PLAYBOOK.find(([k]) => t.includes(k)); return m ? m[1] : ''; }
+
+function buildPlan() {
+  const O = playsFor('O'), D = playsFor('D');
+  const atkD = [], defO = [], adv = [], dis = [], sit = [];
+  const ev = (n, extra) => `n=${n}${extra ? ' · ' + extra : ''}`;
+  // their defense
+  if (D.length) {
+    const t3m = D.filter(p => p.down == 3 && distB(p.dist) === 'Medium');
+    if (t3m.length >= 5) {
+      const pr = pctN(t3m.filter(isPressure).length, t3m.length), mn = pctN(t3m.filter(isMan).length, t3m.length);
+      if (pr >= 40) atkD.push({ t: `They pressure on 3rd & medium (${pr}%), mostly with man behind it (${mn}%)`, d: 'Call screens (RB screen, tunnel), quick game and rub routes (mesh, slant-flat). Build a hot answer into every 3rd-down call. Max-protect a shot if Cover 0 shows.', e: ev(t3m.length), s: pr / 10 + 2 });
+    }
+    const scr = D.filter(p => p.playType === 'Screen' && isPressure(p));
+    if (scr.length >= 3) atkD.push({ t: `Screens vs their pressure average ${avg(scr.map(p => p.yards)).toFixed(1)} yds/play`, d: 'Their blitzers do not peel. Pair a screen with every pressure-down call.', e: ev(scr.length), s: 4 });
+    const e1 = D.filter(p => p.down == 1);
+    if (e1.length >= 8) {
+      const c3 = pctN(e1.filter(p => p.coverage === 'Cover 3').length, e1.length);
+      if (c3 >= 40) atkD.push({ t: `1st down is mostly Cover 3 (${c3}%)`, d: COUNTER_O['Cover 3'] + ' Use play-action off your best run.', e: ev(e1.length), s: 4 });
+    }
+    const mofc = D.filter(p => p.shell === 'MOFC');
+    if (mofc.length >= 8) {
+      const dis2 = pctN(mofc.filter(p => p.coverage === 'Cover 2' || p.coverage === 'Cover 4').length, mofc.length);
+      atkD.push(dis2 <= 15 ? { t: `Their pre-snap shell is honest: single-high stays single-high ${100 - dis2}% of the time`, d: 'Let the QB trust the pre-snap read; check to the answer vs the shell he sees.', e: ev(mofc.length), s: 3 } : { t: `They disguise: single-high rotates to two-high ${dis2}% of the time`, d: 'Use motion and tempo to force their hand before the snap.', e: ev(mofc.length), s: 3 });
+    }
+    computeTells('D').slice(0, 3).forEach(t => atkD.push({ t: `Tell: ${tellText(t)}`, d: t.p < t.base ? (t.outcomeLabel === 'pressure' ? 'Expect a 4-man rush with coverage behind it: the QB can take a full drop; attack the coverage, not the blitz.' : 'Expect zone: find the soft spots, sit down in windows.') : t.outcomeLabel === 'pressure' ? `Have a built-in hot/sight adjust when you see it${t.extra ? '; ' + t.extra : ''}. Slide protection toward it.` : `Call man beaters: ${COUNTER_O['Cover 1']}`, e: ev(t.n, `${t.games} games · ${t.strength}`), s: 5 + t.score / 3 }));
+    const q4 = D.filter(p => p.qtr == 4), q13 = D.filter(p => p.qtr < 4);
+    if (q4.length >= 8 && q13.length >= 8) {
+      const a = avg(q4.map(p => p.yards)), b = avg(q13.map(p => p.yards));
+      if (a - b >= 1) atkD.push({ t: `Their defense wears down: ${a.toFixed(1)} yds/play allowed in Q4 vs ${b.toFixed(1)} in Q1–Q3`, d: 'Use tempo in the 2nd half, stay committed to the run, and save shot plays for Q4.', e: ev(q4.length), s: 5 });
+    }
+  }
+  // players (both sides)
+  const vul = S.players.map(p => ({ p, v: vulnerability(p), st: playerStats(p) })).sort((a, b) => b.v - a.v);
+  vul.filter(x => x.v >= 45).forEach(({ p, v, st }) => {
+    const recs = (p.traits || []).map(playbookFor).filter(Boolean);
+    const facts = [`${p.cls}`, `${p.starts} career starts`];
+    if (p.nat && p.nat !== p.pos) facts.push(`natural ${p.nat}`);
+    if (p.inj !== 'Healthy') facts.push(p.inj);
+    if (st.faults) facts.push(st.faultTypes.map(([k, n]) => `${n} ${k.toLowerCase()}`).join(', '));
+    const item = { t: `Attack #${p.num} ${p.name} (${p.pos}): vulnerability ${v}/100`, d: recs.length ? recs.join(' ') : (p.notes || 'Target with your best matchup.'), e: facts.join(' · ') + (st.faultYards ? ` · ${st.faultYards} yds allowed on his errors` : ''), s: v / 10 };
+    (p.side === 'D' ? atkD : defO).push(item);
+  });
+  // their offense
+  if (O.length) {
+    computeTells('O').slice(0, 4).forEach(t => defO.push({ t: `Tell: ${tellText(t)}`, d: (t.outcomeLabel === 'run' ? 'Call a run blitz or load the box' : 'Play pass-first coverage, rush 4') + (t.extra ? `. ${t.extra}: set the defense to that side.` : '.'), e: ev(t.n, `${t.games} games · ${t.strength}`), s: 5 + t.score / 3 }));
+    const openers = [0, 1, 2].map(i => S.games.map(g => O.filter(p => p.game === g.id).sort((a, b) => a.id - b.id)[i]).filter(Boolean));
+    const lbl = p => `${p.formation} · ${p.concept}${p.dir ? ' ' + p.dir : ''}`;
+    const scripted = openers.map((arr, i) => { const [c, n] = countBy(arr, lbl)[0] || []; return c && n >= 3 ? { i, c, n, of: arr.length, concept: arr.find(p => lbl(p) === c).concept } : null; }).filter(Boolean);
+    if (scripted.length) defO.push({ t: `Scripted openers: ${scripted.map(x => `play ${x.i + 1} = ${x.c} (${x.n}/${x.of} games)`).join('; ')}`, d: 'Have the answer called on the first series: ' + scripted.map(x => `#${x.i + 1}: ${COUNTER_D[x.concept] || 'rep it in practice.'}`).join(' '), e: ev(S.games.length, 'first 3 snaps of each game'), s: 4 + scripted.reduce((a, x) => a + x.n, 0) / 2 });
+    const sc = O.filter(p => p.sudden);
+    if (sc.length >= 3) { const [c, n] = countBy(sc, p => p.concept)[0]; if (n / sc.length >= .5) defO.push({ t: `Sudden change: after a turnover they take a shot (${c}, ${pctN(n, sc.length)}%)`, d: `${COUNTER_D[c] || ''} Call a deep-safe coverage on the first play after a takeaway.`, e: ev(sc.length), s: 6 }); }
+    const t3 = O.filter(p => p.down == 3 && !isRun(p));
+    if (t3.length >= 6) { const [tg, n] = countBy(t3, p => p.player)[0]; defO.push({ t: `3rd-down passes go to ${pname(tg)} ${pctN(n, t3.length)}% of the time`, d: 'Bracket or rob him on 3rd down; make the second option beat you.', e: ev(t3.length), s: 5 }); }
+    const rz = O.filter(p => p.ytg <= 20 && (p.playType === 'Pass' || p.playType === 'PA'));
+    if (rz.length >= 5) { const [c, n] = countBy(rz, p => p.concept)[0]; defO.push({ t: `Red-zone favorite pass: ${c} (${pctN(n, rz.length)}% of RZ passes)`, d: COUNTER_D[c] || '', e: ev(rz.length), s: 4 }); }
+    const sacks = S.plays.filter(p => p.side === 'O' && p.faultType === 'Sack allowed');
+    if (sacks.length >= 3) { const [who, n] = countBy(sacks, p => p.fault)[0]; defO.push({ t: `${pname(who)} has allowed ${n} of their ${sacks.length} sacks`, d: 'Line up your best rusher over him on passing downs; run games to his side.', e: ev(sacks.length), s: 5 }); }
+    const fs = S.plays.filter(p => p.side === 'O' && p.faultType === 'False start');
+    if (fs.length >= 2) { const [who, n] = countBy(fs, p => p.fault)[0]; defO.push({ t: `${pname(who)} has ${n} false starts`, d: 'Show pre-snap movement and crowd noise on 3rd & short.', e: ev(fs.length), s: 3 }); }
+    const f4 = S.plays.filter(p => p.side === 'O' && p.down == 4);
+    if (f4.length) { const go = f4.filter(p => p.decision === 'Go'); sit.push({ t: `4th down: they went for it ${go.length} of ${f4.length} times (${pctN(go.length, f4.length)}%)`, d: go.length / f4.length >= .35 ? 'Aggressive staff: treat 3rd down in plus territory as a 2-down series and keep the short-yardage defense ready.' : 'Conservative staff: expect punts and field goals; win 3rd down.', e: ev(f4.length), s: 3 }); }
+    const tm = O.filter(isTwoMin);
+    if (tm.length >= 5) sit.push({ t: `Two-minute: ${pctN(tm.filter(p => !isRun(p)).length, tm.length)}% pass, favorite ${countBy(tm, p => p.concept)[0][0]}`, d: 'Rush 4, keep everything in front, rally to sideline throws. Practice it Thursday.', e: ev(tm.length), s: 3 });
+    const gl = O.filter(p => p.ytg <= 3);
+    if (gl.length >= 4) sit.push({ t: `Goal line: ${pctN(gl.filter(isRun).length, gl.length)}% run (${countBy(gl, p => p.concept).slice(0, 2).map(x => x[0]).join(', ')})`, d: 'Goal-line front, but keep a backside contain defender for the PA boot.', e: ev(gl.length), s: 3 });
+  }
+  // matchups
+  const ms = S.pairs.map(matchup).filter(Boolean).sort((a, b) => b.edge - a.edge);
+  ms.filter(m => m.edge >= 7).slice(0, 5).forEach(m => adv.push({ t: `${m.pair.ctx}: our #${m.o.num} vs their #${m.t.num} — ${m.label[0]} (+${m.edge})`, d: m.pair.side === 'O' ? 'Feature this matchup in the call sheet; isolate it in key situations.' : 'Win this matchup on passing downs; it can wreck their game plan.', e: m.why.join(' · '), s: m.edge / 4 }));
+  ms.filter(m => m.edge <= -7).reverse().slice(0, 4).forEach(m => dis.push({ t: `${m.pair.ctx}: our #${m.o.num} vs their #${m.t.num} — ${m.label[0]} (${m.edge})`, d: m.pair.side === 'O' ? 'Help him: chip, slide protection, quick game, move the launch point.' : 'Give him help: bracket, safety shade, or a different matchup.', e: m.why.join(' · '), s: -m.edge / 4 }));
+  S.players.filter(p => p.tech >= 5 && p.conf >= 5).forEach(p => dis.push({ t: `Their best player: #${p.num} ${p.name} (${p.pos})`, d: p.notes || 'Account for him on every call.', e: `${p.cls} · ${p.starts} starts`, s: 4 }));
+  const ourInj = S.ours.filter(p => p.inj !== 'Healthy');
+  ourInj.forEach(p => dis.push({ t: `Our #${p.num} (${p.pos}) is ${p.inj.toLowerCase()}`, d: p.notes || 'Plan help and backups.', e: '', s: 2 }));
+  // short yardage / 4th down chart for us
+  const sy = D.filter(p => p.down >= 3 && p.dist <= 2);
+  if (sy.length >= 4) { const conv = pctN(sy.filter(p => p.yards >= p.dist).length, sy.length); sit.push({ t: `Their short-yardage defense allows conversions ${conv}% of the time`, d: conv >= 60 ? 'Be aggressive: go for it on 4th & 2 or less from their 45 in.' : 'Short yardage is a strength for them: keep 4th-down attempts to 4th & 1 in plus territory, use play-action on 3rd & short.', e: ev(sy.length), s: 3 }); }
+  const keys = [];
+  const take = (arr, k) => arr.slice().sort((a, b) => b.s - a.s).slice(0, k).forEach(x => keys.push(x));
+  take(atkD, 2); take(defO, 2); take(adv, 1);
+  const sort = a => a.sort((x, y) => y.s - x.s);
+  return { keys, atkD: sort(atkD), defO: sort(defO), adv: sort(adv), dis: sort(dis), sit: sort(sit), ms };
+}
+
+/* ---------------- UI helpers ---------------- */
+function barRow(label, n, total, cls = '', valText) { const p = total ? n / total : 0; return `<div class="bar ${cls}"><span class="bl" title="${esc(label)}">${esc(label)}</span><span class="bt"><i style="width:${(p * 100).toFixed(1)}%"></i></span><span class="bv">${valText ?? Math.round(p * 100) + '%'} <small>${valText ? '' : 'n=' + n}</small></span></div>`; }
+function bars(list, total, cls, max = 8) { return list.slice(0, max).map(([k, n]) => barRow(k, n, total, cls)).join('') || '<p class="muted">No data</p>'; }
+function confChip(n) { const [l, c] = confLabel(n); return `<span class="chip ${c}">${l} confidence · n=${typeof n === 'number' ? Math.round(n) : n}</span>`; }
+function items(list, empty = 'Nothing flagged yet. Tag more plays to build evidence.') { return list.length ? list.map(x => `<div class="item"><b>${esc(x.t)}</b>${x.d ? `<div>${esc(x.d)}</div>` : ''}${x.e ? `<div class="ev">${esc(x.e)}</div>` : ''}</div>`).join('') : `<p class="muted">${empty}</p>`; }
+function opts(list, cur, any = 'Any') { return (any !== null ? `<option value="">${any}</option>` : '') + list.map(v => { const [val, lab] = Array.isArray(v) ? v : [v, v]; return `<option value="${esc(val)}" ${String(cur) === String(val) ? 'selected' : ''}>${esc(lab)}</option>`; }).join(''); }
+function heatColor(p) { return `color-mix(in srgb, var(--bar) ${Math.round(p * 70)}%, transparent)`; }
+function uniq(side, k) { return [...new Set(S.plays.filter(p => p.side === side && scrim(p)).map(p => p[k]).filter(Boolean))].sort(); }
+function linkify(text) {
+  return esc(text).replace(/#(\d{1,2})\b/g, (m, n) => { const p = playerByNum(n); return p ? `<span class="mention" title="${esc(p.name)}">#${n} ${esc(p.pos)}</span>` : m; });
+}
+function meter(v) { const c = v >= 60 ? 'var(--bad)' : v >= 40 ? 'var(--warn)' : 'var(--good)'; return `<div class="meter" title="Vulnerability ${v}"><i style="width:${v}%;background:${c}"></i></div>`; }
+const dots = n => '●'.repeat(Math.max(0, Math.min(5, n))) + '<span class="muted">' + '○'.repeat(5 - Math.max(0, Math.min(5, n))) + '</span>';
+
+/* ---------------- tabs ---------------- */
+const TABS = [
+  ['overview', 'Overview'], ['tend', 'Tendencies'], ['tells', 'Tells'], ['pred', 'Next-Call Predictor'], ['sit', 'Situations'],
+  ['people', 'Personnel'], ['match', 'Matchups'], ['plan', 'Attack Plan'], ['film', 'Film Room'], ['intel', 'Intel'], ['report', 'Report'], ['data', 'Data']
+];
+function render() {
+  $('#vsline').innerHTML = `<b>${esc(S.meta.ourTeam)}</b> vs <b>${esc(S.meta.opponent)}</b> · ${esc(S.meta.gameDate)}`;
+  $('#nav').innerHTML = TABS.map(([id, l]) => `<button class="${S.ui.tab === id ? 'on' : ''}" data-tab="${id}">${l}</button>`).join('');
+  const fn = { overview: vOverview, tend: vTend, tells: vTells, pred: vPred, sit: vSit, people: vPeople, match: vMatch, plan: vPlan, film: vFilm, intel: vIntel, report: vReport, data: vData }[S.ui.tab] || vOverview;
+  $('#main').innerHTML = fn();
+  if (S.ui.tab === 'film') bindFilm();
+}
+
+function vOverview() {
+  const O = playsFor('O'), D = playsFor('D');
+  const t3 = O.filter(p => p.down == 3), t3d = D.filter(p => p.down == 3);
+  const rzDrives = new Map();
+  O.filter(p => p.ytg <= 20).forEach(p => rzDrives.set(p.game + '-' + p.drive, false));
+  O.filter(p => p.result === 'TD').forEach(p => { const k = p.game + '-' + p.drive; if (rzDrives.has(k)) rzDrives.set(k, true); });
+  const rzTD = [...rzDrives.values()].filter(Boolean).length;
+  const to = O.filter(p => p.result === 'INT' || p.result === 'Fumble').length;
+  const plan = buildPlan();
+  const k = (v, l) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`;
+  return `<h1>${esc(S.meta.opponent)} — opponent overview</h1>
+  <p class="sub">${S.games.length} games · ${S.plays.length} snaps tagged (${O.length} offense, ${D.length} defense). Every number links back to tagged plays; small samples are flagged.</p>
+  <h3>Their offense</h3>
+  <div class="kpis">${k(pctN(O.filter(isRun).length, O.length) + '%', 'Run rate')}${k(avg(O.map(p => p.yards)).toFixed(1), 'Yards / play')}${k(pctN(O.filter(explosive).length, O.length) + '%', 'Explosive play rate')}${k(pctN(t3.filter(p => p.yards >= p.dist).length, t3.length) + '%', `3rd-down conversion (n=${t3.length})`)}${k(rzDrives.size ? pctN(rzTD, rzDrives.size) + '%' : '—', `Red-zone TD rate (${rzDrives.size} trips)`)}${k(to, 'Turnovers')}</div>
+  <h3>Their defense</h3>
+  <div class="kpis">${k(pctN(D.filter(isPressure).length, D.length) + '%', 'Pressure rate (5+ / sim)')}${k(countBy(D, p => p.coverage)[0]?.[0] || '—', 'Most-used coverage')}${k(pctN(D.filter(isMan).length, D.length) + '%', 'Man coverage rate')}${k(avg(D.map(p => p.yards)).toFixed(1), 'Yards / play allowed')}${k(pctN(t3d.filter(p => p.yards < p.dist).length, t3d.length) + '%', `3rd-down stop rate (n=${t3d.length})`)}${k(pctN(D.filter(explosive).length, D.length) + '%', 'Explosives allowed')}</div>
+  <div class="grid2">
+    <div class="card"><h2>Keys to victory</h2>${items(plan.keys)}</div>
+    <div class="card"><h2>Games scouted</h2><div class="tw"><table><tr><th>Game</th><th>Result</th><th>Off snaps</th><th>Def snaps</th></tr>${S.games.map(g => `<tr><td>${esc(g.label)}</td><td>${esc(g.result || '')}</td><td>${O.filter(p => p.game === g.id).length}</td><td>${D.filter(p => p.game === g.id).length}</td></tr>`).join('')}</table></div>
+      <h2 style="margin-top:14px">Availability watch</h2>${S.players.filter(p => p.inj !== 'Healthy' || (p.nat && p.nat !== p.pos)).map(p => `<div class="item"><b>#${p.num} ${esc(p.name)} (${p.pos}) ${p.inj !== 'Healthy' ? `<span class="chip warn">${p.inj}</span>` : ''}${p.nat && p.nat !== p.pos ? `<span class="chip bad">Out of position: natural ${esc(p.nat)}</span>` : ''}</b><div class="ev">${esc(p.notes)}</div></div>`).join('') || '<p class="muted">No flags.</p>'}
+    </div>
+  </div>`;
+}
+
+function filterBar(side) {
+  const f = S.ui.filters[side] || {};
+  const sel = (k, label, list) => `<label class="f">${label}<select data-f="${k}">${opts(list, f[k] ?? '')}</select></label>`;
+  return `<div class="filters">
+    ${sel('down', 'Down', ['1', '2', '3', '4'])}${sel('distB', 'Distance', DB)}${sel('zone', 'Field zone', ZONES)}${sel('hash', 'Hash', [['L', 'Left'], ['M', 'Middle'], ['R', 'Right']])}
+    ${sel('qtr', 'Quarter', ['1', '2', '3', '4'])}${sel('scoreB', 'Score', SCOREB)}${sel('twoMin', '2-minute', ['Yes', 'No'])}
+    ${sel('personnel', side === 'O' ? 'Personnel' : 'Personnel faced', uniq(side, 'personnel'))}${sel('formation', side === 'O' ? 'Formation' : 'Formation faced', uniq(side, 'formation'))}
+    ${sel('game', 'Game', S.games.map(g => [String(g.id), g.label]))}
+    <button class="btn sm" data-act="clearf">Clear</button></div>`;
+}
+function vTend() {
+  const side = S.ui.tside;
+  const all = playsFor(side), arr = applyFilters(all, S.ui.filters[side]);
+  const n = arr.length;
+  let body;
+  const grid = (metric, label) => {
+    const rows = [1, 2, 3, 4].map(d => `<tr><th>${d}${['st', 'nd', 'rd', 'th'][d - 1]}</th>${DB.map(b => { const s = arr.filter(p => p.down == d && distB(p.dist) === b); if (!s.length) return '<td class="c muted">—</td>'; const pv = s.filter(metric).length / s.length; return `<td class="c" style="background:${heatColor(pv)}">${Math.round(pv * 100)}%<br><small>n=${s.length}</small></td>`; }).join('')}</tr>`).join('');
+    return `<div class="tw"><table class="heat"><tr><th>${label}</th>${DB.map(b => `<th>${b}</th>`).join('')}</tr>${rows}</table></div>`;
+  };
+  if (side === 'O') {
+    const runs = arr.filter(isRun), pass = arr.filter(p => !isRun(p));
+    const conc = countBy(arr, p => p.concept).map(([c, k]) => { const s = arr.filter(p => p.concept === c); return `<tr><td>${esc(c)}</td><td>${k}</td><td>${pctN(k, n)}%</td><td>${avg(s.map(p => p.yards)).toFixed(1)}</td><td>${pctN(s.filter(success).length, k)}%</td><td>${s.filter(explosive).length}</td></tr>`; }).join('');
+    const forms = countBy(arr, p => p.formation).map(([f, k]) => { const s = arr.filter(p => p.formation === f); return `<tr><td>${esc(f)}</td><td>${k}</td><td>${pctN(s.filter(isRun).length, k)}%</td><td>${esc(countBy(s, p => p.concept)[0]?.[0] || '')}</td></tr>`; }).join('');
+    body = `<div class="grid">
+      <div class="card"><h2>Play type</h2>${bars(countBy(arr, p => p.playType), n)}</div>
+      <div class="card"><h2>Run direction</h2>${bars(countBy(runs, p => ({ L: 'Left', M: 'Middle', R: 'Right' })[p.dir]), runs.length, 'alt')}<h2 style="margin-top:12px">Ball carriers</h2>${bars(countBy(runs, p => pname(p.player)), runs.length, 'alt2', 4)}</div>
+      <div class="card"><h2>Pass targets</h2>${bars(countBy(pass, p => pname(p.player)), pass.length, 'alt2')}</div>
+      <div class="card"><h2>Personnel</h2>${bars(countBy(arr, p => p.personnel + ' pers.'), n)}</div>
+    </div>
+    <div class="grid2" style="margin-top:12px">
+      <div class="card"><h2>Run % by down & distance</h2>${grid(isRun, 'Down')}</div>
+      <div class="card"><h2>Formations</h2><div class="tw"><table><tr><th>Formation</th><th>n</th><th>Run %</th><th>Top play</th></tr>${forms}</table></div></div>
+    </div>
+    <div class="card" style="margin-top:12px"><h2>Concepts</h2><div class="tw"><table><tr><th>Concept</th><th>n</th><th>Share</th><th>Avg yds</th><th>Success</th><th>Explosives</th></tr>${conc}</table></div></div>`;
+  } else {
+    const pr = arr.filter(isPressure);
+    const disg = arr.filter(p => p.shell === 'MOFC');
+    body = `<div class="grid">
+      <div class="card"><h2>Coverage</h2>${bars(countBy(arr, p => p.coverage), n)}</div>
+      <div class="card"><h2>Pressure</h2>${bars(countBy(arr, p => p.pressure), n, 'alt')}</div>
+      <div class="card"><h2>Blitzers</h2>${bars(countBy(pr, p => pname(p.blitzer)), pr.length, 'alt2')}</div>
+      <div class="card"><h2>Fronts</h2>${bars(countBy(arr, p => p.front), n)}<h2 style="margin-top:12px">Pre-snap cues</h2>${bars(countBy(arr, p => p.cue), n, 'alt')}</div>
+    </div>
+    <div class="grid2" style="margin-top:12px">
+      <div class="card"><h2>Pressure % by down & distance</h2>${grid(isPressure, 'Down')}</div>
+      <div class="card"><h2>Man coverage % by down & distance</h2>${grid(isMan, 'Down')}</div>
+      <div class="card"><h2>Disguise check</h2><p>Single-high pre-snap (MOFC): post-snap coverage</p>${bars(countBy(disg, p => p.coverage), disg.length)}</div>
+      <div class="card"><h2>Yards allowed by play type</h2><div class="tw"><table><tr><th>Their opponent ran</th><th>n</th><th>Avg yds</th><th>Explosives</th></tr>${countBy(arr, p => p.playType).map(([t, k]) => { const s = arr.filter(p => p.playType === t); return `<tr><td>${t}</td><td>${k}</td><td>${avg(s.map(p => p.yards)).toFixed(1)}</td><td>${s.filter(explosive).length}</td></tr>`; }).join('')}</table></div></div>
+    </div>`;
+  }
+  return `<h1>Tendencies</h1><p class="sub">Filter any situation. Each chart shows the share and the number of plays behind it.</p>
+  <div class="seg"><button class="${side === 'O' ? 'on' : ''}" data-act="tside" data-v="O">Their offense</button><button class="${side === 'D' ? 'on' : ''}" data-act="tside" data-v="D">Their defense</button></div>
+  ${filterBar(side)}
+  <div class="row" style="margin-bottom:12px">${confChip(n)} <button class="btn sm" data-act="cutup">▶ Open these ${n} plays in Film Room</button></div>
+  ${n ? body : '<div class="card"><p>No plays match these filters.</p></div>'}`;
+}
+
+function vTells() {
+  const sec = side => { const ts = computeTells(side); return ts.length ? `<div class="tw"><table><tr><th>Indicator</th><th>Strength</th><th>n</th><th>Games</th><th>Detail</th></tr>${ts.map(t => `<tr><td>${esc(tellText(t))}</td><td><span class="chip ${t.strength === 'Strong' ? 'good' : t.strength === 'Moderate' ? 'acc' : 'warn'}">${t.strength}</span></td><td>${t.n}</td><td>${t.games}</td><td>${esc(t.extra)}</td></tr>`).join('')}</table></div>` : '<p class="muted">No tells meet the evidence bar yet.</p>'; };
+  return `<h1>Tells & indicators</h1>
+  <p class="sub">Pre-snap features that predict the call. A tell is shown only when it moves the outcome by 20+ points over the baseline with at least 8 snaps; it is <b>Strong</b> only when it holds across 3+ games with 12+ snaps.</p>
+  <div class="card"><h2>Their offense (for our defense)</h2>${sec('O')}</div>
+  <div class="card" style="margin-top:12px"><h2>Their defense (for our offense)</h2>${sec('D')}</div>`;
+}
+
+function vPred() {
+  const s = S.ui.pred, side = s.side;
+  const sit = { ...s, down: +s.down, dist: +s.dist, ytg: +s.ytg, qtr: +s.qtr, clock: parseClock(s.clock), score: +s.score };
+  const r = predict(side, sit);
+  const pinp = (k, label, type = 'number', extra = '') => `<label class="f">${label}<input data-pred="${k}" type="${type}" value="${esc(s[k])}" ${extra} style="width:90px"></label>`;
+  const psel = (k, label, list, any = 'Any') => `<label class="f">${label}<select data-pred="${k}">${opts(list, s[k], any)}</select></label>`;
+  let out;
+  const pctTxt = v => Math.round(v * 100) + '%';
+  const pbars = (list, cls = '', max = 6) => list.slice(0, max).map(([k, v]) => `<div class="bar ${cls}"><span class="bl">${esc(k)}</span><span class="bt"><i style="width:${(v * 100).toFixed(1)}%"></i></span><span class="bv">${pctTxt(v)}</span></div>`).join('');
+  const sim = `<div class="tw"><table><tr><th>Game</th><th>Q</th><th>Situation</th><th>Look</th><th>Call</th><th>Result</th></tr>${r.similar.map(p => `<tr><td>${esc(S.games.find(g => g.id === p.game)?.label || p.game)}</td><td>${p.qtr}</td><td>${p.down}&${p.dist} at ${p.ytg} to go</td><td>${esc(p.personnel)} ${esc(p.formation)}</td><td>${side === 'O' ? esc(`${p.playType} · ${p.concept} ${p.dir}`) : esc(`${p.coverage} · ${p.pressure}${p.blitzer ? ' (' + pname(p.blitzer) + ')' : ''}`)}</td><td>${p.yards} yds ${esc(p.result)}</td></tr>`).join('')}</table></div>`;
+  if (side === 'O') {
+    const pt = r.dist(p => p.playType), cc = r.dist(p => p.concept), dir = r.dist(p => isRun(p) ? ({ L: 'Run left', M: 'Run middle', R: 'Run right' })[p.dir] : ''), tg = r.dist(p => pname(p.player));
+    const fm = s.formation ? null : r.dist(p => p.formation);
+    const topC = cc[0]?.[0];
+    out = `<div class="grid">
+      <div class="card"><h2>Play type</h2>${pbars(pt)}</div>
+      <div class="card"><h2>Most likely concepts</h2>${pbars(cc, 'alt')}</div>
+      <div class="card"><h2>Run direction</h2>${pbars(dir, 'alt2', 3)}<h2 style="margin-top:12px">Ball goes to</h2>${pbars(tg, 'alt2', 4)}</div>
+      ${fm ? `<div class="card"><h2>Expected formation</h2>${pbars(fm)}</div>` : ''}
+    </div>
+    <div class="card" style="margin-top:12px"><h2>Recommended defensive answer</h2>
+      <p><b>${pt[0] ? `${esc(pt[0][0])} ${pctTxt(pt[0][1])}` : ''}</b> — top concept <b>${esc(topC || '')}</b>: ${esc(COUNTER_D[topC] || '')}</p>
+      <p class="muted">${(pt.find(x => x[0] === 'Run')?.[1] || 0) >= .55 ? 'Run-heavy look: load the box or call a run blitz to the predicted side.' : (pt.find(x => x[0] === 'Run')?.[1] || 0) <= .25 ? 'Pass-first look: rush 4, play coverage on the top target, screen alert.' : 'Balanced: play sound base defense, rely on the pre-snap tells.'}</p></div>`;
+  } else {
+    const cv = r.dist(p => p.coverage), pr = r.dist(p => p.pressure), bz = r.dist(p => isPressure(p) ? pname(p.blitzer) : ''), fr = r.dist(p => p.front);
+    const prP = pr.filter(x => x[0] !== '4-man').reduce((a, x) => a + x[1], 0);
+    out = `<div class="grid">
+      <div class="card"><h2>Coverage</h2>${pbars(cv)}</div>
+      <div class="card"><h2>Pressure</h2>${pbars(pr, 'alt')}<p style="margin-top:8px"><b>${pctTxt(prP)}</b> chance of 5+ / simulated pressure</p></div>
+      <div class="card"><h2>Likely blitzer</h2>${pbars(bz, 'alt2', 4)}<h2 style="margin-top:12px">Front</h2>${pbars(fr, '', 3)}</div>
+    </div>
+    <div class="card" style="margin-top:12px"><h2>Recommended offensive answer</h2>
+      <p>Most likely <b>${esc(cv[0]?.[0] || '')}</b>: ${esc(COUNTER_O[cv[0]?.[0]] || '')}</p>
+      ${prP >= .4 ? `<p><b>Pressure alert (${pctTxt(prP)}):</b> ${esc(COUNTER_O.pressure)}</p>` : ''}</div>`;
+  }
+  return `<h1>Next-call predictor</h1>
+  <p class="sub">Weights every scouted snap by how closely it matches this situation (down, distance, field zone, hash, score, clock, personnel, formation; recent games count more), then blends in their season-wide tendency so small samples never look certain.</p>
+  <div class="seg"><button class="${side === 'O' ? 'on' : ''}" data-act="pside" data-v="O">Their offense call</button><button class="${side === 'D' ? 'on' : ''}" data-act="pside" data-v="D">Their defense call</button></div>
+  <div class="card filters">
+    ${psel('down', 'Down', ['1', '2', '3', '4'], null)}${pinp('dist', 'Distance', 'number', 'min="1" max="99"')}${pinp('ytg', 'Yards to goal', 'number', 'min="1" max="99"')}
+    ${psel('hash', 'Hash', [['L', 'Left'], ['M', 'Middle'], ['R', 'Right']], null)}${psel('qtr', 'Quarter', ['1', '2', '3', '4'], null)}${pinp('clock', 'Clock', 'text')}
+    ${pinp('score', side === 'O' ? 'Their score margin' : 'Their score margin')}
+    ${psel('personnel', side === 'O' ? 'Their personnel' : 'Our personnel', uniq(side, 'personnel'))}${psel('formation', side === 'O' ? 'Their formation' : 'Our formation', uniq(side, 'formation'))}
+    ${side === 'O' ? psel('motion', 'Motion', uniq('O', 'motion')) : ''}
+  </div>
+  <div class="row" style="margin:10px 0">${confChip(r.ess)} <span class="muted">Effective sample of similar plays, out of ${r.n} scouted snaps; prior built from ${r.priorN} broadly similar snaps. ${zoneOf(sit.ytg)} · ${distB(sit.dist)} · ${scoreB(sit.score)}${isTwoMin(sit) ? ' · 2-minute' : ''}</span></div>
+  ${out}
+  <div class="card" style="margin-top:12px"><h2>Most similar plays</h2>${sim}</div>`;
+}
+
+function vSit() {
+  const O = playsFor('O'), D = playsFor('D');
+  const t3row = (arr, side) => DB.map(b => { const s = arr.filter(p => p.down == 3 && distB(p.dist) === b); if (!s.length) return ''; return side === 'O' ? `<tr><td>${b}</td><td>${s.length}</td><td>${pctN(s.filter(isRun).length, s.length)}%</td><td>${pctN(s.filter(p => p.yards >= p.dist).length, s.length)}%</td><td>${esc(countBy(s, p => p.concept)[0]?.[0] || '')}</td><td>${esc(pname(countBy(s.filter(p => !isRun(p)), p => p.player)[0]?.[0] || ''))}</td></tr>` : `<tr><td>${b}</td><td>${s.length}</td><td>${pctN(s.filter(isPressure).length, s.length)}%</td><td>${esc(countBy(s, p => p.coverage)[0]?.[0] || '')}</td><td>${pctN(s.filter(p => p.yards < p.dist).length, s.length)}%</td></tr>`; }).join('');
+  const openers = S.games.map(g => { const f = O.filter(p => p.game === g.id).sort((a, b) => a.id - b.id).slice(0, 4); return `<tr><td>${esc(g.label)}</td>${f.map(p => `<td>${esc(p.formation)}<br><small>${esc(p.concept)} ${esc(p.dir)}</small></td>`).join('')}</tr>`; }).join('');
+  const sc = O.filter(p => p.sudden);
+  const f4 = S.plays.filter(p => p.side === 'O' && p.down == 4);
+  const f4rows = ZONES.map(z => { const s = f4.filter(p => zoneOf(p.ytg) === z); if (!s.length) return ''; const go = s.filter(p => p.decision === 'Go'); return `<tr><td>${z}</td><td>${s.length}</td><td>${go.length}</td><td>${s.filter(p => p.decision === 'FG').length}</td><td>${s.filter(p => p.decision === 'Punt').length}</td><td>${go.length ? pctN(go.filter(p => p.yards >= p.dist).length, go.length) + '%' : '—'}</td></tr>`; }).join('');
+  const byQ = (arr, cls) => [1, 2, 3, 4].map(q => { const s = arr.filter(p => p.qtr == q); const a = avg(s.map(p => p.yards)); return `<div class="bar ${cls}"><span class="bl">Q${q}</span><span class="bt"><i style="width:${Math.min(100, a / 10 * 100)}%"></i></span><span class="bv">${a.toFixed(1)} <small>n=${s.length}</small></span></div>`; }).join('');
+  const half = (arr, fn) => { const h1 = arr.filter(p => p.qtr <= 2), h2 = arr.filter(p => p.qtr > 2); return `${pctN(h1.filter(fn).length, h1.length)}% → ${pctN(h2.filter(fn).length, h2.length)}%`; };
+  const rz = O.filter(p => p.ytg <= 20), rzD = D.filter(p => p.ytg <= 20), tm = O.filter(isTwoMin), tmD = D.filter(isTwoMin);
+  return `<h1>Situational football</h1><p class="sub">Third down, red zone, two-minute, openers, sudden change, 4th-down decisions and fatigue.</p>
+  <div class="grid2">
+    <div class="card"><h2>3rd down — their offense</h2><div class="tw"><table><tr><th>Distance</th><th>n</th><th>Run</th><th>Conv.</th><th>Top play</th><th>Top target</th></tr>${t3row(O, 'O')}</table></div></div>
+    <div class="card"><h2>3rd down — their defense</h2><div class="tw"><table><tr><th>Distance</th><th>n</th><th>Pressure</th><th>Top coverage</th><th>Stop rate</th></tr>${t3row(D, 'D')}</table></div></div>
+    <div class="card"><h2>Red zone</h2><p><b>Offense</b> (n=${rz.length}): ${pctN(rz.filter(isRun).length, rz.length)}% run · top: ${esc(countBy(rz, p => p.concept).slice(0, 3).map(x => `${x[0]} (${x[1]})`).join(', '))}</p><p><b>Defense</b> (n=${rzD.length}): ${pctN(rzD.filter(isPressure).length, rzD.length)}% pressure · ${esc(countBy(rzD, p => p.coverage).slice(0, 3).map(x => `${x[0]} ${pctN(x[1], rzD.length)}%`).join(', '))}</p></div>
+    <div class="card"><h2>Two-minute</h2><p><b>Offense</b> (n=${tm.length}): ${pctN(tm.filter(p => !isRun(p)).length, tm.length)}% pass · ${esc(countBy(tm, p => p.formation).slice(0, 2).map(x => x[0]).join(', '))} · top: ${esc(countBy(tm, p => p.concept).slice(0, 3).map(x => x[0]).join(', '))}</p><p><b>Defense</b> (n=${tmD.length}): ${pctN(tmD.filter(isPressure).length, tmD.length)}% pressure · ${esc(countBy(tmD, p => p.coverage).slice(0, 2).map(x => x[0]).join(', '))}</p></div>
+    <div class="card"><h2>Opening script (first 4 offensive snaps)</h2><div class="tw"><table><tr><th>Game</th><th>1</th><th>2</th><th>3</th><th>4</th></tr>${openers}</table></div></div>
+    <div class="card"><h2>Sudden change (first play after a takeaway)</h2>${sc.length ? bars(countBy(sc, p => `${p.formation} · ${p.concept}`), sc.length) : '<p class="muted">No sudden-change snaps tagged.</p>'}</div>
+    <div class="card"><h2>4th-down decisions</h2><div class="tw"><table><tr><th>Zone</th><th>4th downs</th><th>Go</th><th>FG</th><th>Punt</th><th>Go conv.</th></tr>${f4rows}</table></div></div>
+    <div class="card"><h2>Fatigue: yards per play by quarter</h2><p class="muted">Offense gained</p>${byQ(O, '')}<p class="muted" style="margin-top:8px">Defense allowed</p>${byQ(D, 'alt')}
+      <p style="margin-top:8px">Half-time adjustment — run rate H1→H2: <b>${half(O, isRun)}</b> · pressure rate H1→H2: <b>${half(D, isPressure)}</b></p></div>
+  </div>`;
+}
+
+function vPeople() {
+  const side = S.ui.pside || 'D';
+  const list = side === 'US' ? S.ours : S.players.filter(p => side === 'ALL' || p.side === side);
+  const cards = list.map(p => {
+    const theirs = side !== 'US';
+    const v = theirs ? vulnerability(p) : null, st = theirs ? playerStats(p) : null;
+    return `<div class="card pcard">
+      <div class="row"><div class="pnum">#${esc(p.num)}</div><div><b>${esc(p.name)}</b><br><small>${esc(p.pos)} · ${esc(p.cls)} · ${p.starts} starts · ${Math.floor(p.ht / 12)}'${p.ht % 12}" ${p.wt} lb · ${p.forty}s</small></div><div class="spacer"></div><button class="btn sm" data-act="editp" data-num="${esc(p.num)}" data-us="${theirs ? '' : '1'}">Edit</button></div>
+      <div>${p.inj !== 'Healthy' ? `<span class="chip warn">${esc(p.inj)}</span>` : '<span class="chip good">Healthy</span>'}${p.nat && p.nat !== p.pos ? `<span class="chip bad">Out of position (natural ${esc(p.nat)})</span>` : ''}${(p.cls === 'FR' || p.cls === 'SO') ? '<span class="chip">Young</span>' : ''}${(p.traits || []).map(t => `<span class="chip acc">${esc(t)}</span>`).join('')}</div>
+      <div class="row" style="gap:14px"><span>Technique <span class="dots">${dots(p.tech)}</span></span><span>Footwork <span class="dots">${dots(p.foot)}</span></span><span>Confidence <span class="dots">${dots(p.conf)}</span></span></div>
+      ${theirs ? `<div><small>Vulnerability ${v}/100</small>${meter(v)}</div>
+      <small>${st.carries ? `${st.carries} carries · ` : ''}${st.targets ? `${st.targets} targets · ` : ''}${(st.carries || st.targets) ? `${st.yards} yds · ${st.explosives} explosive · ` : ''}${st.faults ? `<b>${st.faultTypes.map(([k, n]) => `${n} ${k.toLowerCase()}`).join(', ')}</b>${st.faultYards ? ` (${st.faultYards} yds)` : ''}` : 'No charted errors'}</small>` : ''}
+      ${p.notes ? `<div class="ev">${esc(p.notes)}</div>` : ''}
+    </div>`;
+  }).join('');
+  const b = (v, l) => `<button class="${side === v ? 'on' : ''}" data-act="pside2" data-v="${v}">${l}</button>`;
+  return `<h1>Personnel</h1><p class="sub">Experience, technique, footwork, confidence (1–5 rubric), injuries, position fit and charted errors. Vulnerability combines all of them (formula in the product spec).</p>
+  <div class="row"><div class="seg">${b('D', 'Their defense')}${b('O', 'Their offense')}${b('US', 'Our roster')}</div><div class="spacer"></div><button class="btn sm noprint" data-act="addp" data-us="${side === 'US' ? '1' : ''}">+ Add player</button></div>
+  <div class="grid">${cards || '<p class="muted">No players.</p>'}</div>`;
+}
+
+function vMatch() {
+  const ms = S.pairs.map(matchup).filter(Boolean);
+  const tbl = side => { const rows = ms.filter(m => m.pair.side === side).sort((a, b) => b.edge - a.edge); return `<div class="tw"><table><tr><th>Matchup</th><th>Ours</th><th>Theirs</th><th style="min-width:140px">Edge</th><th>Why</th></tr>${rows.map(m => { const w = Math.min(50, Math.abs(m.edge) * 1.8); const style = m.edge >= 0 ? `left:50%;width:${w}%;background:var(--good)` : `right:50%;width:${w}%;background:var(--bad)`; return `<tr><td>${esc(m.pair.ctx)}</td><td>#${m.o.num} ${esc(m.o.pos)}</td><td>#${m.t.num} ${esc(m.t.name)}</td><td><div class="diverge"><i style="${style}"></i></div><span class="chip ${m.label[1]}">${m.label[0]} ${m.edge > 0 ? '+' : ''}${m.edge}</span></td><td><small>${esc(m.why.join(' · '))}</small></td></tr>`; }).join('')}</table></div>`; };
+  return `<h1>Matchup board</h1><p class="sub">Our player vs theirs at each pairing: grades, experience, injury, position fit, plus speed (skill players) or size (linemen). Edit pairings in the Data tab.</p>
+  <div class="card"><h2>Our offense vs their defense</h2>${tbl('O')}</div>
+  <div class="card" style="margin-top:12px"><h2>Our defense vs their offense</h2>${tbl('D')}</div>`;
+}
+
+function vPlan() {
+  const p = buildPlan();
+  return `<h1>Attack plan</h1><p class="sub">Generated from the tagged data, player grades and matchups. Each point lists its evidence; the staff decides.</p>
+  <div class="card"><h2>Keys to victory</h2>${items(p.keys)}</div>
+  <div class="grid2" style="margin-top:12px">
+    <div class="card"><h2>Our advantages</h2>${items(p.adv)}</div>
+    <div class="card"><h2>Their advantages / our risks</h2>${items(p.dis)}</div>
+    <div class="card"><h2>How to attack their defense</h2>${items(p.atkD)}</div>
+    <div class="card"><h2>How to stop their offense</h2>${items(p.defO)}</div>
+  </div>
+  <div class="card" style="margin-top:12px"><h2>Situational plan</h2>${items(p.sit)}</div>`;
+}
+
+/* ---------------- film room ---------------- */
+let videoURL = null, audioNotes = [], recog = null, recorder = null;
+function vFilm() {
+  const ff = S.ui.film;
+  let list = S.plays.slice().sort((a, b) => b.game - a.game || a.id - b.id);
+  if (ff) list = applyFilters(list.filter(p => p.side === ff.side && scrim(p)), ff.f);
+  const last = S.plays[S.plays.length - 1] || {};
+  const d = S.ui.draft || { game: String(last.game ?? 0), side: 'O', qtr: 1, clock: '12:00', down: 1, dist: 10, ytg: 75, hash: 'M', score: 0 };
+  const fsel = (k, label, list2, any = null) => `<label>${label}<select name="${k}">${opts(list2, d[k] ?? '', any)}</select></label>`;
+  const finp = (k, label, type = 'text') => `<label>${label}<input name="${k}" type="${type}" value="${esc(d[k] ?? '')}"></label>`;
+  const hasSR = !!(window.SpeechRecognition || window.webkitSpeechRecognition), hasMR = !!(window.MediaRecorder && navigator.mediaDevices);
+  return `<h1>Film room</h1><p class="sub">Load game film, tag each snap at its timestamp, dictate notes, and build cut-ups. Video stays on this device.</p>
+  <div class="film">
+    <div class="card">
+      <div class="row" style="margin-bottom:8px"><input type="file" id="vfile" accept="video/*"><span class="muted">or</span><input id="vurl" placeholder="Video URL (mp4)" style="flex:1;min-width:140px"><button class="btn sm" data-act="vurl">Load</button></div>
+      <video id="vid" controls playsinline ${videoURL ? `src="${esc(videoURL)}"` : ''}></video>
+      <div class="row" style="margin-top:8px"><button class="btn sm" data-act="seek" data-v="-5">⟲ 5s</button><button class="btn sm" data-act="rate" data-v="0.5">½×</button><button class="btn sm" data-act="rate" data-v="1">1×</button><button class="btn sm" data-act="seek" data-v="5">5s ⟳</button><span class="muted" id="vt"></span></div>
+      <h3 style="margin-top:12px">Audio notes (this session)</h3>
+      <div class="row"><button class="btn sm" data-act="rec" ${hasMR ? '' : 'disabled title="Recording not supported in this browser"'}>● Record</button><span class="muted" id="recst"></span></div>
+      <div id="alist">${audioNotes.map((a, i) => `<div class="row" style="margin-top:6px"><small>Note ${i + 1} @ ${a.t}s</small><audio controls src="${a.url}"></audio></div>`).join('')}</div>
+    </div>
+    <div class="card">
+      <h2>Tag this snap</h2>
+      <form id="tagf">
+        <div class="fgrid">
+          ${fsel('game', 'Game', S.games.map(g => [String(g.id), g.label]))}
+          ${fsel('side', 'Unit', [['O', 'Their offense'], ['D', 'Their defense']])}
+          ${fsel('qtr', 'Qtr', ['1', '2', '3', '4'])}${finp('clock', 'Clock')}
+          ${fsel('down', 'Down', ['1', '2', '3', '4'])}${finp('dist', 'Distance', 'number')}${finp('ytg', 'Yards to goal', 'number')}
+          ${fsel('hash', 'Hash', [['L', 'Left'], ['M', 'Middle'], ['R', 'Right']])}${finp('score', 'Their margin', 'number')}
+          ${fsel('personnel', 'Personnel', PERS)}${fsel('formation', 'Formation', FORMS)}${fsel('motion', 'Motion', ['None', 'Jet', 'Orbit', 'Shift'])}
+          ${fsel('playType', 'Play type', PLAYTYPES)}${fsel('concept', 'Concept', CONCEPTS)}${fsel('dir', 'Direction', [['L', 'Left'], ['M', 'Middle'], ['R', 'Right']])}
+          ${finp('player', 'Ball carrier / target #')}${finp('yards', 'Yards', 'number')}
+          ${fsel('result', 'Result', ['Gain', '1st Down', 'TD', 'Incomplete', 'Sack', 'INT', 'Fumble', 'Penalty'])}
+          ${fsel('front', 'Def front', FRONTS, '—')}${fsel('shell', 'Pre-snap shell', ['MOFC', 'MOFO'], '—')}${fsel('coverage', 'Coverage', COVS, '—')}
+          ${fsel('pressure', 'Pressure', PRESS, '—')}${finp('blitzer', 'Blitzer #')}${fsel('cue', 'Pre-snap cue', CUES, '—')}
+          ${finp('fault', 'Player at fault #')}${fsel('faultType', 'Error type', ['Missed tackle', 'Blown coverage', 'Bit on play-action', 'Sack allowed', 'Drop', 'False start', 'Missed assignment', 'Penalty'], '—')}
+          ${finp('videoT', 'Video time (s)', 'number')}
+        </div>
+        <label style="display:block;margin-top:8px;font-size:12px;color:var(--muted)">Notes (footwork, engagement, confidence, injury signs…)<textarea name="notes">${esc(d.notes || '')}</textarea></label>
+        <div class="row" style="margin-top:8px"><button type="button" class="btn sm" data-act="stamp">⏱ Use video time</button><button type="button" class="btn sm" data-act="dictate" ${hasSR ? '' : 'disabled title="Dictation not supported in this browser"'}>🎙 Dictate notes</button><div class="spacer"></div><button type="submit" class="btn pri">Save play & next</button></div>
+      </form>
+    </div>
+  </div>
+  <div class="card" style="margin-top:12px">
+    ${ff ? `<div class="banner">Cut-up: ${esc(ff.label)} — ${list.length} plays <button class="btn sm" data-act="clearcut">Show all</button></div>` : ''}
+    <h2>Play log</h2>
+    <div class="tw"><table><tr><th>Game</th><th>Unit</th><th>Q</th><th>Clock</th><th>D&D</th><th>YTG</th><th>Look</th><th>Call</th><th>Yds</th><th>Result</th><th>Video</th><th></th></tr>
+    ${list.slice(0, 300).map(p => `<tr><td>${esc(S.games.find(g => g.id === p.game)?.label || p.game)}</td><td>${p.side === 'O' ? 'Off' : 'Def'}</td><td>${p.qtr}</td><td>${clockStr(p.clock)}</td><td>${p.down}&${p.dist}</td><td>${p.ytg}</td><td>${esc(p.personnel)} ${esc(p.formation)}</td><td>${p.side === 'O' ? esc(`${p.playType} ${p.concept} ${p.dir}`) : esc(`${p.coverage || ''} ${p.pressure || ''}`)}</td><td>${p.yards}</td><td>${esc(p.result)}${p.fault ? ` <small>(${esc(pname(p.fault))}: ${esc(p.faultType)})</small>` : ''}</td><td>${p.videoT != null && p.videoT !== '' ? `<button class="btn sm" data-act="go" data-v="${p.videoT}">▶ ${p.videoT}s</button>` : ''}</td><td><button class="btn sm" data-act="delplay" data-id="${p.id}">✕</button></td></tr>`).join('')}
+    </table></div>${list.length > 300 ? `<p class="muted">Showing 300 of ${list.length}.</p>` : ''}
+  </div>`;
+}
+function bindFilm() {
+  const v = $('#vid'), vt = $('#vt');
+  if (v) v.addEventListener('timeupdate', () => { vt.textContent = `t = ${v.currentTime.toFixed(1)}s`; });
+  const vf = $('#vfile');
+  if (vf) vf.addEventListener('change', () => { const f = vf.files[0]; if (!f) return; if (videoURL && videoURL.startsWith('blob:')) URL.revokeObjectURL(videoURL); videoURL = URL.createObjectURL(f); v.src = videoURL; toast('Video loaded'); });
+  const form = $('#tagf');
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    const fd = Object.fromEntries(new FormData(form).entries());
+    const num = k => (fd[k] === '' || fd[k] == null) ? 0 : +fd[k];
+    const p = {
+      id: S.plays.reduce((m, x) => Math.max(m, x.id), 0) + 1, game: +fd.game, side: fd.side, drive: 0, qtr: num('qtr'), clock: parseClock(fd.clock), down: num('down'), dist: Math.max(1, num('dist')), ytg: Math.max(1, num('ytg')), hash: fd.hash, score: num('score'),
+      personnel: fd.personnel, formation: fd.formation, motion: fd.motion, playType: fd.playType, concept: fd.concept, dir: fd.dir, player: fd.player.replace('#', '').trim(), yards: num('yards'), result: fd.result,
+      front: fd.front, shell: fd.shell, coverage: fd.coverage, pressure: fd.pressure, blitzer: fd.blitzer.replace('#', '').trim(), cue: fd.cue, fault: fd.fault.replace('#', '').trim(), faultType: fd.faultType, notes: fd.notes, videoT: fd.videoT === '' ? '' : +fd.videoT, sudden: false
+    };
+    if (p.down === 4) p.decision = 'Go';
+    S.plays.push(p);
+    // carry forward: advance the situation
+    const nx = { ...fd, notes: '', yards: '', player: '', fault: '', faultType: '', videoT: '' };
+    if (p.result === 'TD' || p.result === 'INT' || p.result === 'Fumble') Object.assign(nx, { down: 1, dist: 10, ytg: 75 });
+    else { const ny = Math.min(99, p.ytg - p.yards); if (p.yards >= p.dist) Object.assign(nx, { down: 1, dist: Math.min(10, ny), ytg: ny }); else Object.assign(nx, { down: Math.min(4, p.down + 1), dist: Math.max(1, p.dist - p.yards), ytg: ny }); }
+    S.ui.draft = nx;
+    save(); render(); toast('Play saved. Situation advanced.');
+  });
+}
+
+/* ---------------- intel ---------------- */
+const INJ_WORDS = /(injur|ankle|knee|shoulder|hamstring|concussion|questionable|doubtful|limp|wrap|brace|sprain|out for)/i;
+const DEPTH_WORDS = /(start(ed|ing|er)|backup|depth|moved to|converted|replac)/i;
+function vIntel() {
+  const hasSR = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  return `<h1>Intel board</h1><p class="sub">Articles, press-conference and broadcast transcripts, injury reports and staff notes. Player numbers (#24) link to player cards; injury and depth-chart language is flagged automatically. Use public sources only.</p>
+  <div class="card"><form id="intelf">
+    <div class="row"><label class="f">Source type<select name="type">${opts(['Coach note', 'Article', 'Press conference', 'Broadcast transcript', 'Radio / podcast', 'Injury report', 'Social media (public)', 'Officials crew', 'Weather'], 'Coach note', null)}</select></label>
+    <label class="f" style="flex:1">Title<input name="title" placeholder="e.g. Local paper recap, Wk 9"></label>
+    <label class="f">Import .txt<input type="file" id="itxt" accept=".txt,text/plain"></label></div>
+    <textarea name="text" id="itext" placeholder="Paste text or dictate…" style="margin-top:8px"></textarea>
+    <div class="row" style="margin-top:8px"><button type="button" class="btn sm" data-act="dictate-intel" ${hasSR ? '' : 'disabled title="Dictation not supported in this browser"'}>🎙 Dictate</button><div class="spacer"></div><button class="btn pri" type="button" data-act="addintel">Save intel</button></div>
+  </form></div>
+  ${S.intel.slice().reverse().map(it => `<div class="card" style="margin-top:12px"><div class="row"><b>${esc(it.title || '(untitled)')}</b><span class="chip">${esc(it.type)}</span>${INJ_WORDS.test(it.text) ? '<span class="chip warn">Injury intel</span>' : ''}${DEPTH_WORDS.test(it.text) ? '<span class="chip acc">Depth chart</span>' : ''}<div class="spacer"></div><small class="muted">${esc(it.date)}</small><button class="btn sm" data-act="delintel" data-id="${it.id}">✕</button></div><p style="margin-top:8px">${linkify(it.text)}</p></div>`).join('')}`;
+}
+
+/* ---------------- report ---------------- */
+function vReport() {
+  const p = buildPlan(), O = playsFor('O'), D = playsFor('D');
+  const dd = (arr, side) => `<table><tr><th>Down</th>${DB.map(b => `<th>${b}</th>`).join('')}</tr>${[1, 2, 3].map(d => `<tr><th>${d}</th>${DB.map(b => { const s = arr.filter(x => x.down == d && distB(x.dist) === b); if (s.length < 3) return '<td class="muted">—</td>'; return side === 'O' ? `<td>${pctN(s.filter(isRun).length, s.length)}% run<br><small>${esc(countBy(s, x => x.concept)[0][0])} · n=${s.length}</small></td>` : `<td>${pctN(s.filter(isPressure).length, s.length)}% pressure<br><small>${esc(countBy(s, x => x.coverage)[0][0])} · n=${s.length}</small></td>`; }).join('')}</tr>`).join('')}</table>`;
+  const tellList = side => computeTells(side).slice(0, 6).map(t => `<li>${esc(tellText(t))} <small>(n=${t.n}, ${t.games} games, ${t.strength})</small></li>`).join('');
+  return `<div class="row noprint" style="margin-bottom:12px"><button class="btn pri" data-act="print">🖨 Print / save as PDF</button><span class="muted">Prints this report only.</span></div>
+  <div class="report">
+    <h1>Scouting report: ${esc(S.meta.opponent)}</h1>
+    <p class="sub">${esc(S.meta.ourTeam)} game plan · ${esc(S.meta.gameDate)} · Based on ${S.games.length} games, ${O.length} offensive and ${D.length} defensive snaps · Prepared ${new Date().toLocaleDateString()}</p>
+    <h2>Keys to victory</h2>${items(p.keys)}
+    <h2>How to attack their defense</h2>${items(p.atkD)}
+    <h2>How to stop their offense</h2>${items(p.defO)}
+    <h2>Advantages and risks</h2><div class="grid2"><div class="card"><h3>Our advantages</h3>${items(p.adv)}</div><div class="card"><h3>Their advantages / our risks</h3>${items(p.dis)}</div></div>
+    <h2>Situational</h2>${items(p.sit)}
+    <h2>Their offense by down & distance</h2><div class="tw">${dd(O, 'O')}</div>
+    <h3 style="margin-top:10px">Offensive tells</h3><ul>${tellList('O') || '<li class="muted">None yet</li>'}</ul>
+    <h2>Their defense by down & distance</h2><div class="tw">${dd(D, 'D')}</div>
+    <h3 style="margin-top:10px">Defensive tells</h3><ul>${tellList('D') || '<li class="muted">None yet</li>'}</ul>
+    <h2>Personnel</h2><div class="tw"><table><tr><th>#</th><th>Player</th><th>Pos</th><th>Class</th><th>Status</th><th>Vuln.</th><th>Notes</th></tr>${S.players.slice().sort((a, b) => vulnerability(b) - vulnerability(a)).map(x => `<tr><td>${esc(x.num)}</td><td>${esc(x.name)}</td><td>${esc(x.pos)}${x.nat && x.nat !== x.pos ? ` <small>(nat. ${esc(x.nat)})</small>` : ''}</td><td>${esc(x.cls)}</td><td>${esc(x.inj)}</td><td>${vulnerability(x)}</td><td><small>${esc(x.notes)}</small></td></tr>`).join('')}</table></div>
+    <p class="legal">Internal coaching document. Built from lawfully obtained game film and public information only. Percentages are tendencies, not certainties; sample sizes are shown.</p>
+  </div>`;
+}
+
+/* ---------------- data ---------------- */
+function vData() {
+  return `<h1>Data</h1><p class="sub">Everything is stored in this browser only. Export to back up or share with your staff.</p>
+  <div class="grid">
+    <div class="card"><h2>Game setup</h2>
+      <label class="f">Our team<input data-meta="ourTeam" value="${esc(S.meta.ourTeam)}"></label>
+      <label class="f" style="margin-top:6px">Opponent<input data-meta="opponent" value="${esc(S.meta.opponent)}"></label>
+      <label class="f" style="margin-top:6px">Game date<input data-meta="gameDate" value="${esc(S.meta.gameDate)}"></label>
+      <div class="row" style="margin-top:10px"><input id="newgame" placeholder="Add scouted game, e.g. Wk 10 vs Oak Grove" style="flex:1"><button class="btn sm" data-act="addgame">Add game</button></div>
+    </div>
+    <div class="card"><h2>Import / export</h2>
+      <div class="row"><button class="btn" data-act="expjson">Export all (JSON)</button><button class="btn" data-act="expcsv">Export plays (CSV)</button></div>
+      <div class="row" style="margin-top:8px"><label class="f">Import JSON<input type="file" id="impjson" accept=".json,application/json"></label><label class="f">Import plays CSV<input type="file" id="impcsv" accept=".csv,text/csv"></label></div>
+      <p class="muted" style="margin-top:8px">CSV columns match the export: game, side, qtr, clock, down, dist, ytg, hash, score, personnel, formation, motion, playType, concept, dir, player, yards, result, front, shell, coverage, pressure, blitzer, cue, fault, faultType, videoT, notes. Film-exchange exports can be mapped to these columns.</p>
+    </div>
+    <div class="card"><h2>Matchup pairings</h2><p class="muted">One per line: <code>O or D, our #, their #, description</code></p><textarea id="pairs" style="min-height:160px">${esc(S.pairs.map(p => `${p.side}, ${p.ours}, ${p.theirs}, ${p.ctx}`).join('\n'))}</textarea><button class="btn sm" data-act="savepairs" style="margin-top:6px">Save pairings</button></div>
+    <div class="card"><h2>Reset</h2><div class="row"><button class="btn" data-act="demo">Reload demo data</button><button class="btn" data-act="wipe">Start empty</button></div><p class="muted" style="margin-top:8px">Demo team names, players and games are fictional.</p></div>
+  </div>`;
+}
+const CSV_COLS = ['game', 'side', 'qtr', 'clock', 'down', 'dist', 'ytg', 'hash', 'score', 'personnel', 'formation', 'motion', 'playType', 'concept', 'dir', 'player', 'yards', 'result', 'front', 'shell', 'coverage', 'pressure', 'blitzer', 'cue', 'fault', 'faultType', 'videoT', 'notes'];
+function download(name, text, type) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
+function parseCSV(t) {
+  const rows = []; let row = [], cur = '', q = false;
+  for (let i = 0; i < t.length; i++) { const c = t[i]; if (q) { if (c === '"' && t[i + 1] === '"') { cur += '"'; i++; } else if (c === '"') q = false; else cur += c; } else if (c === '"') q = true; else if (c === ',') { row.push(cur); cur = ''; } else if (c === '\n' || c === '\r') { if (c === '\r' && t[i + 1] === '\n') i++; row.push(cur); rows.push(row); row = []; cur = ''; } else cur += c; }
+  if (cur || row.length) { row.push(cur); rows.push(row); }
+  return rows.filter(r => r.some(x => x !== ''));
+}
+
+/* ---------------- player editor ---------------- */
+function openEditor(num, isUs, isNew) {
+  const list = isUs ? S.ours : S.players;
+  const p = isNew ? { num: '', name: '', pos: '', side: 'D', cls: 'JR', starts: 0, ht: 72, wt: 200, forty: 4.8, tech: 3, foot: 3, conf: 3, inj: 'Healthy', nat: '', traits: [], notes: '' } : playerByNum(num, list);
+  if (!p) return;
+  const dl = $('#dlg');
+  const g = (k, l, t = 'text') => `<label>${l}<input name="${k}" type="${t}" value="${esc(Array.isArray(p[k]) ? p[k].join(', ') : p[k])}" ${t === 'number' ? 'step="any"' : ''}></label>`;
+  const s = (k, l, list2) => `<label>${l}<select name="${k}">${opts(list2, p[k], null)}</select></label>`;
+  dl.innerHTML = `<form method="dialog" id="pform"><h2>${isNew ? 'Add player' : `Edit #${esc(p.num)} ${esc(p.name)}`}</h2>
+    <div class="fgrid">${g('num', 'Number')}${g('name', 'Name')}${g('pos', 'Position')}${g('nat', 'Natural position')}${s('side', 'Unit', [['O', 'Offense'], ['D', 'Defense']])}${s('cls', 'Class', CLS)}${g('starts', 'Career starts', 'number')}${g('ht', 'Height (in)', 'number')}${g('wt', 'Weight', 'number')}${g('forty', '40 time', 'number')}
+    ${s('tech', 'Technique 1–5', ['1', '2', '3', '4', '5'])}${s('foot', 'Footwork 1–5', ['1', '2', '3', '4', '5'])}${s('conf', 'Confidence 1–5', ['1', '2', '3', '4', '5'])}${s('inj', 'Injury status', INJ)}</div>
+    <label style="display:block;margin-top:8px;font-size:12px;color:var(--muted)">Traits (comma-separated, e.g. false steps, eyes in backfield, crashes on runs)<input name="traits" value="${esc((p.traits || []).join(', '))}" style="width:100%"></label>
+    <label style="display:block;margin-top:8px;font-size:12px;color:var(--muted)">Notes<textarea name="notes">${esc(p.notes)}</textarea></label>
+    <div class="row" style="margin-top:10px">${isNew ? '' : '<button class="btn" value="delete">Delete</button>'}<div class="spacer"></div><button class="btn" value="cancel">Cancel</button><button class="btn pri" value="save">Save</button></div></form>`;
+  dl.showModal();
+  dl.onclose = () => {
+    const f = $('#pform'); if (!f) return;
+    if (dl.returnValue === 'delete') { const i = list.indexOf(p); if (i >= 0) list.splice(i, 1); save(); render(); return; }
+    if (dl.returnValue !== 'save') return;
+    const fd = Object.fromEntries(new FormData(f).entries());
+    Object.assign(p, { num: fd.num.replace('#', '').trim(), name: fd.name, pos: fd.pos.toUpperCase(), nat: fd.nat.toUpperCase(), side: fd.side, cls: fd.cls, starts: +fd.starts || 0, ht: +fd.ht || 0, wt: +fd.wt || 0, forty: +fd.forty || 0, tech: +fd.tech, foot: +fd.foot, conf: +fd.conf, inj: fd.inj, traits: fd.traits.split(',').map(x => x.trim()).filter(Boolean), notes: fd.notes });
+    if (isNew) list.push(p);
+    save(); render(); toast('Player saved');
+  };
+}
+
+/* ---------------- dictation & recording ---------------- */
+function dictateInto(el, btn) {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
+  if (recog) { recog.stop(); return; }
+  recog = new SR(); recog.continuous = true; recog.interimResults = false; recog.lang = 'en-US';
+  btn.textContent = '■ Stop dictation';
+  recog.onresult = e => { for (let i = e.resultIndex; i < e.results.length; i++) if (e.results[i].isFinal) el.value += (el.value ? ' ' : '') + e.results[i][0].transcript.trim().replace(/\bnumber (\d+)/gi, '#$1'); };
+  recog.onend = () => { recog = null; btn.textContent = '🎙 Dictate'; };
+  recog.onerror = () => { toast('Dictation stopped (microphone permission?)'); };
+  recog.start();
+}
+async function toggleRecord(btn) {
+  if (recorder) { recorder.stop(); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const chunks = []; const v = $('#vid'); const t = v ? +v.currentTime.toFixed(1) : 0;
+    recorder = new MediaRecorder(stream);
+    recorder.ondataavailable = e => chunks.push(e.data);
+    recorder.onstop = () => { stream.getTracks().forEach(x => x.stop()); audioNotes.push({ t, url: URL.createObjectURL(new Blob(chunks, { type: recorder.mimeType })) }); recorder = null; render(); };
+    recorder.start(); btn.textContent = '■ Stop'; $('#recst').textContent = `Recording at ${t}s…`;
+  } catch (e) { toast('Microphone not available'); }
+}
+
+/* ---------------- events ---------------- */
+document.addEventListener('click', e => {
+  const tab = e.target.closest('[data-tab]');
+  if (tab) { S.ui.tab = tab.dataset.tab; save(); render(); window.scrollTo(0, 0); return; }
+  const a = e.target.closest('[data-act]'); if (!a) return;
+  const act = a.dataset.act, v = a.dataset.v;
+  const vid = $('#vid');
+  switch (act) {
+    case 'theme': { const r = document.documentElement; const dark = r.dataset.theme ? r.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches; r.dataset.theme = dark ? 'light' : 'dark'; try { localStorage.setItem(KEY + '-theme', r.dataset.theme); } catch (x) { } break; }
+    case 'tside': S.ui.tside = v; save(); render(); break;
+    case 'pside': S.ui.pred.side = v; S.ui.pred.personnel = ''; S.ui.pred.formation = ''; S.ui.pred.motion = ''; save(); render(); break;
+    case 'pside2': S.ui.pside = v; save(); render(); break;
+    case 'clearf': S.ui.filters[S.ui.tside] = {}; save(); render(); break;
+    case 'cutup': { const f = { ...(S.ui.filters[S.ui.tside] || {}) }; const lab = Object.entries(f).filter(([, x]) => x !== '').map(([k, x]) => `${k}: ${k === 'game' ? (S.games.find(g => String(g.id) === x)?.label || x) : x}`).join(', ') || 'all situations'; S.ui.film = { side: S.ui.tside, f, label: `${S.ui.tside === 'O' ? 'Their offense' : 'Their defense'} — ${lab}` }; S.ui.tab = 'film'; save(); render(); window.scrollTo(0, 0); break; }
+    case 'clearcut': S.ui.film = null; save(); render(); break;
+    case 'go': if (vid && vid.src) { vid.currentTime = +v; vid.play().catch(() => { }); } else toast('Load the game film first'); break;
+    case 'seek': if (vid) vid.currentTime = Math.max(0, vid.currentTime + +v); break;
+    case 'rate': if (vid) vid.playbackRate = +v; break;
+    case 'vurl': { const u = $('#vurl').value.trim(); if (/^https?:\/\//.test(u)) { videoURL = u; vid.src = u; } else toast('Enter an http(s) video URL'); break; }
+    case 'stamp': { const f = $('#tagf'); if (vid) f.videoT.value = vid.currentTime.toFixed(1); break; }
+    case 'dictate': dictateInto($('#tagf').notes, a); break;
+    case 'dictate-intel': dictateInto($('#itext'), a); break;
+    case 'rec': toggleRecord(a); break;
+    case 'delplay': S.plays = S.plays.filter(p => p.id !== +a.dataset.id); save(); render(); break;
+    case 'editp': openEditor(a.dataset.num, !!a.dataset.us, false); break;
+    case 'addp': openEditor('', !!a.dataset.us, true); break;
+    case 'addintel': { const f = $('#intelf'); const fd = Object.fromEntries(new FormData(f).entries()); if (!fd.text.trim()) { toast('Add some text first'); break; } S.intel.push({ id: Date.now(), type: fd.type, title: fd.title, text: fd.text, date: new Date().toISOString().slice(0, 10) }); save(); render(); toast('Intel saved'); break; }
+    case 'delintel': S.intel = S.intel.filter(x => x.id !== +a.dataset.id); save(); render(); break;
+    case 'print': window.print(); break;
+    case 'addgame': { const l = $('#newgame').value.trim(); if (!l) break; S.games.push({ id: S.games.reduce((m, g) => Math.max(m, g.id), -1) + 1, label: l, result: '' }); save(); render(); toast('Game added'); break; }
+    case 'expjson': download('zydeco-scout.json', JSON.stringify(S, null, 1), 'application/json'); break;
+    case 'expcsv': download('zydeco-plays.csv', [CSV_COLS.join(',')].concat(S.plays.map(p => CSV_COLS.map(c => { let x = c === 'clock' ? clockStr(p.clock) : (p[c] ?? ''); x = String(x); return /[",\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x; }).join(','))).join('\n'), 'text/csv'); break;
+    case 'savepairs': { S.pairs = $('#pairs').value.split('\n').map(l => l.split(',').map(x => x.trim())).filter(x => x.length >= 3 && (x[0] === 'O' || x[0] === 'D')).map(x => ({ side: x[0], ours: x[1].replace('#', ''), theirs: x[2].replace('#', ''), ctx: x.slice(3).join(', ') || 'Matchup' })); save(); toast(`${S.pairs.length} pairings saved`); break; }
+    case 'demo': if (confirm('Replace all data with the demo data set?')) { S = genDemo(); save(); render(); toast('Demo data loaded'); } break;
+    case 'wipe': if (confirm('Delete all plays, players and intel in this browser?')) { const ui = defaultUI(); ui.tab = 'data'; S = { v: 1, meta: { opponent: 'Opponent', ourTeam: 'Our Team', gameDate: '' }, games: [{ id: 0, label: 'Game 1', result: '' }], plays: [], players: [], ours: [], pairs: [], intel: [], ui }; save(); render(); } break;
+  }
+});
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.dataset.f) { const side = S.ui.tside; S.ui.filters[side] = { ...(S.ui.filters[side] || {}), [t.dataset.f]: t.value }; save(); render(); return; }
+  if (t.dataset.pred) { S.ui.pred[t.dataset.pred] = t.value; save(); render(); return; }
+  if (t.dataset.meta) { S.meta[t.dataset.meta] = t.value; save(); render(); return; }
+  if (t.id === 'itxt' && t.files[0]) { t.files[0].text().then(x => { $('#itext').value = x; const f = $('#intelf'); if (!f.title.value) f.title.value = t.files[0].name; }); return; }
+  if (t.id === 'impjson' && t.files[0]) { t.files[0].text().then(x => { try { const d = JSON.parse(x); if (!Array.isArray(d.plays)) throw 0; d.ui = d.ui || defaultUI(); S = d; save(); render(); toast('Imported'); } catch (err) { toast('Not a Zydeco Scout JSON file'); } }); return; }
+  if (t.id === 'impcsv' && t.files[0]) {
+    t.files[0].text().then(x => {
+      const rows = parseCSV(x); if (rows.length < 2) { toast('Empty CSV'); return; }
+      const head = rows[0].map(h => h.trim()); let id = S.plays.reduce((m, p) => Math.max(m, p.id), 0);
+      const numeric = ['game', 'qtr', 'down', 'dist', 'ytg', 'score', 'yards'];
+      rows.slice(1).forEach(r => { const p = { id: ++id, drive: 0, sudden: false }; head.forEach((h, i) => { if (!CSV_COLS.includes(h)) return; let val = r[i] ?? ''; if (numeric.includes(h)) val = +val || 0; if (h === 'clock') val = parseClock(val); if (h === 'videoT') val = val === '' ? '' : +val; p[h] = val; }); if (p.down === 4 && !p.decision) p.decision = NONPLAY.includes(p.playType) ? p.playType : 'Go'; S.plays.push(p); });
+      for (const p of S.plays) if (!S.games.some(g => g.id === p.game)) S.games.push({ id: p.game, label: `Game ${p.game + 1}`, result: '' });
+      save(); render(); toast(`Imported ${rows.length - 1} plays`);
+    });
+  }
+});
+
+/* ---------------- boot ---------------- */
+try { const th = localStorage.getItem(KEY + '-theme'); if (th) document.documentElement.dataset.theme = th; } catch (e) { }
+S = load() || genDemo();
+S.ui = Object.assign(defaultUI(), S.ui || {});
+save();
+render();
+</script>
+</body>
+</html>
